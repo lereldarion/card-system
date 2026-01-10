@@ -1,0 +1,17 @@
+{
+  "name": "lereldarion.card-system",
+  "displayName": "Lereldarion Card System",
+  "version": "0.1.0",
+  "description": "Card shader system",
+  "author": {
+    "name": "Lereldarion",
+    "url": "https://github.com/lereldarion/"
+  },
+  "documentationUrl": "https://github.com/lereldarion/card-system",
+  "keywords": [
+    "shaders",
+    "card"
+  ],
+  "license": "MIT",
+  "unity": "2019.4"
+}
