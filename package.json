@@ -2,7 +2,7 @@
   "name": "lereldarion.card-system",
   "displayName": "Lereldarion Card System",
   "version": "0.1.0",
-  "description": "Card shader system",
+  "description": "Shader system for rendering cards (TCG)",
   "author": {
     "name": "Lereldarion",
     "url": "https://github.com/lereldarion/"
