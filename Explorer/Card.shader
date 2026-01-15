@@ -116,6 +116,7 @@ Shader "Lereldarion/ExplorerCard" {
             uniform fixed4 _Logo_Color;
             static const float4 _Logo_Rotation_Scale_Offset = float4(24, 0.41, 0.19, -0.1);
             static const float _Logo_MSDF_Pixel_Range = 8;
+            static const float _Logo_MSDF_Texture_Size = 128;
 
             uniform Texture2D<float3> _FontTex;
             static const float _Font_MSDF_Pixel_Range = 2;
@@ -155,28 +156,22 @@ Shader "Lereldarion/ExplorerCard" {
                 return (p.x >= 0) != (p.y >= 0) ? max(rectangle_sd, chamfer_sd) : rectangle_sd;
             }
             
-            // SDF anti-alias blend https://blog.pkh.me/p/44-perfecting-anti-aliasing-on-signed-distance-functions.html
-            float sdf_blend_with_aa(float sdf) {
-                const float l2_d_sdf = length(float2(ddx_fine(sdf), ddy_fine(sdf)));
-                return smoothstep(-l2_d_sdf / 2, l2_d_sdf / 2, -sdf);
+            // SDF anti-alias blend
+            // https://blog.pkh.me/p/44-perfecting-anti-aliasing-on-signed-distance-functions.html
+            // https://github.com/Chlumsky/msdfgen has other info.
+            // Strategy : determine uv / sdf scale in screen space, and blend smoothly at 1px screen scale.
+            // sdf should be in uv units, so both scales are equivalent. Use uv as it is continuous, sdf is not due to ifs.
+            float compute_screenspace_scale_of_uv(float2 uv) {
+                const float2 screenspace_uv_scales = sqrt(pow2(ddx_fine(uv)) + pow2(ddy_fine(uv)));
+                return 0.5 * (screenspace_uv_scales.x + screenspace_uv_scales.y);
+            }
+            float sdf_blend_with_aa(float sdf, float screenspace_scale_of_uv) {
+                const float w = 0.5 * screenspace_scale_of_uv;
+                return smoothstep(-w, w, -sdf);
             }
 
             // MSDF textures utils https://github.com/Chlumsky/msdfgen
             float median(float3 msd) { return max(min(msd.r, msd.g), min(max(msd.r, msd.g), msd.b)); }
-            float msdf_blend(Texture2D<float3> tex, float2 uv, float pixel_range) {
-                const float tex_sd = median(tex.SampleLevel(sampler_clamp_bilinear, uv, 0)) - 0.5;
-
-                // Scale stored texture sdf to screen.
-                // pixel_range is the one used to generate the texture
-                float2 texture_size;
-                tex.GetDimensions(texture_size.x, texture_size.y);
-                const float2 unit_range = pixel_range / texture_size;
-                const float2 screen_tex_size = rsqrt(pow2(ddx_fine(uv)) + pow2(ddy_fine(uv)));
-                const float screen_px_range = max(0.5 * dot(unit_range, screen_tex_size), 1.0);
-                const float screen_sd = screen_px_range * tex_sd;
-                return saturate(screen_sd + 0.5);
-                // TODO rework in terms of msdf_sample ?
-            }
             float msdf_sample(Texture2D<float3> tex, float2 uv, float pixel_range, float2 texture_size) {
                 const float tex_sd = median(tex.SampleLevel(sampler_clamp_bilinear, uv, 0)) - 0.5;
 
@@ -199,6 +194,7 @@ Shader "Lereldarion/ExplorerCard" {
                 const float2 raw_uv_range = float2(_Aspect_Ratio, 1);
                 const float2 quadrant_size = 0.5 * raw_uv_range;
                 const float2 centered_uv = input.uv0 - quadrant_size; // [-AR/2, AR/2] x [-0.5, 0.5]
+                const float screenspace_scale_of_uv = compute_screenspace_scale_of_uv(centered_uv);
                 
                 bool blurred = false;
                 float ui_sd;
@@ -245,23 +241,8 @@ Shader "Lereldarion/ExplorerCard" {
                         sincos(_Logo_Rotation_Scale_Offset.x * UNITY_PI / 180.0, logo_rotation_cos_sin.y, logo_rotation_cos_sin.x);
                         logo_rotation_cos_sin /= _Logo_Rotation_Scale_Offset.y;
                         const float2x2 logo_rotscale = float2x2(logo_rotation_cos_sin.xy, logo_rotation_cos_sin.yx * float2(-1, 1));
-                        logo_opacity = msdf_blend(_LogoTex, mul(logo_rotscale, description_uv - _Logo_Rotation_Scale_Offset.zw) + 0.5, _Logo_MSDF_Pixel_Range);
-
-                        // Text test
-                        float font_tex_size = 512;
-                        float2 glyph_pixels = float2(51, 46);
-
-                        uint glyph_row = _Font_Test_Character / 10;
-                        uint glyph_col = _Font_Test_Character - glyph_row * 10;
-
-                        float font_pixel_uv = 1. / font_tex_size;
-                        float2 font_glyph_uv_size = font_pixel_uv * glyph_pixels;
-                        float2 cell_uv = description_uv * _Font_Test_Size + 0.5 * font_glyph_uv_size;
-                        if(all(cell_uv == clamp(cell_uv, 0, font_glyph_uv_size))) {
-                            float2 cell_offset = float2(font_glyph_uv_size.x * glyph_col, 1. - font_glyph_uv_size.y * (glyph_row + 1));
-                            ui_sd = min(ui_sd, msdf_sample(_FontTex, cell_uv + cell_offset, _Font_MSDF_Pixel_Range, font_tex_size));
-                            // artefacts due to stitching sdfs but not continuous
-                        }
+                        const float sd = msdf_sample(_LogoTex, mul(logo_rotscale, description_uv - _Logo_Rotation_Scale_Offset.zw) + 0.5, _Logo_MSDF_Pixel_Range, _Logo_MSDF_Texture_Size);
+                        logo_opacity = sdf_blend_with_aa(sd * _Logo_Rotation_Scale_Offset.y, screenspace_scale_of_uv);
                     } else {
                         // Title
                         const float2 title_uv = centered_uv - float2(0, quadrant_size.y - (_UI_Title_Height + 2 * _UI_Common_Margin));
@@ -269,6 +250,23 @@ Shader "Lereldarion/ExplorerCard" {
                         const float title_box_sd = psdf_half_chamfer_box(title_uv, title_size, _UI_Title_Chamfer);
                         blurred = title_box_sd <= 0;
                         ui_sd = min(ui_sd, extrude_border_with_thickness(title_box_sd, _UI_Border_Thickness));
+                    }
+                }
+
+                // Text test
+                {
+                    float font_tex_size = 512;
+                    float2 glyph_pixels = float2(51, 46);
+    
+                    uint glyph_row = _Font_Test_Character / 10;
+                    uint glyph_col = _Font_Test_Character - glyph_row * 10;
+    
+                    float font_pixel_uv = 1. / font_tex_size;
+                    float2 font_glyph_uv_size = font_pixel_uv * glyph_pixels;
+                    float2 cell_uv = centered_uv * _Font_Test_Size + 0.5 * font_glyph_uv_size;
+                    if(all(cell_uv == clamp(cell_uv, 0, font_glyph_uv_size))) {
+                        float2 cell_offset = float2(font_glyph_uv_size.x * glyph_col, 1. - font_glyph_uv_size.y * (glyph_row + 1));
+                        ui_sd = min(ui_sd, msdf_sample(_FontTex, cell_uv + cell_offset, _Font_MSDF_Pixel_Range, font_tex_size) / _Font_Test_Size);
                     }
                 }
 
@@ -282,15 +280,13 @@ Shader "Lereldarion/ExplorerCard" {
                 const float mip_bias = blurred ? _Blur_Mip_Bias : 0;
                 const fixed4 foreground = _MainTex.SampleBias(sampler_MainTex, avatar_uv, mip_bias);
                 const fixed3 background = _BackgroundTex.SampleBias(sampler_BackgroundTex, background_uv, mip_bias);
+
+                // Color composition
                 fixed3 color = lerp(background, foreground.rgb, foreground.a);
-
-                if(blurred) {
-                    color = lerp(color, 0, _Blur_Darken);
-                }
-
+                if(blurred) { color = lerp(color, 0, _Blur_Darken); }
                 color = lerp(color, _Logo_Color.rgb, logo_opacity * _Logo_Color.a);
-                
-                return fixed4(lerp(color, _UI_Color.rgb, sdf_blend_with_aa(ui_sd)), 1);
+                color = lerp(color, _UI_Color.rgb, sdf_blend_with_aa(ui_sd, screenspace_scale_of_uv));
+                return fixed4(color, 1);
             }
             ENDCG            
         }
