@@ -120,6 +120,7 @@ Shader "Lereldarion/ExplorerCard" {
 
             uniform Texture2D<float3> _FontTex;
             static const float _Font_MSDF_Pixel_Range = 2;
+            static const float _Font_MSDF_Texture_Size = 512;
             uniform uint _Font_Test_Character;
             uniform float _Font_Test_Size;
 
@@ -255,18 +256,18 @@ Shader "Lereldarion/ExplorerCard" {
 
                 // Text test
                 {
-                    float font_tex_size = 512;
                     float2 glyph_pixels = float2(51, 46);
     
                     uint glyph_row = _Font_Test_Character / 10;
                     uint glyph_col = _Font_Test_Character - glyph_row * 10;
     
-                    float font_pixel_uv = 1. / font_tex_size;
+                    float font_pixel_uv = 1. / _Font_MSDF_Texture_Size;
                     float2 font_glyph_uv_size = font_pixel_uv * glyph_pixels;
-                    float2 cell_uv = centered_uv * _Font_Test_Size + 0.5 * font_glyph_uv_size;
-                    if(all(cell_uv == clamp(cell_uv, 0, font_glyph_uv_size))) {
+                    float2 cell_uv = centered_uv * _Font_Test_Size + /* centering */ 0.5 * font_glyph_uv_size;
+                    // Clamp to glyph rectangle, with half-pixel padding
+                    if(all(0.5 * font_pixel_uv < cell_uv && cell_uv < font_glyph_uv_size - 0.5 * font_pixel_uv)) {
                         float2 cell_offset = float2(font_glyph_uv_size.x * glyph_col, 1. - font_glyph_uv_size.y * (glyph_row + 1));
-                        ui_sd = min(ui_sd, msdf_sample(_FontTex, cell_uv + cell_offset, _Font_MSDF_Pixel_Range, font_tex_size) / _Font_Test_Size);
+                        ui_sd = min(ui_sd, msdf_sample(_FontTex, cell_uv + cell_offset, _Font_MSDF_Pixel_Range, _Font_MSDF_Texture_Size) / _Font_Test_Size);
                     }
                 }
 
