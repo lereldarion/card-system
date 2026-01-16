@@ -35,13 +35,17 @@ Shader "Lereldarion/ExplorerCard" {
 
         [Header(Logo)]
         _Logo_Color("Color", Color) = (1, 1, 1, 0.1)
-        [HideInInspector] [NoScaleOffset] _LogoTex("Logo (MSDF)", 2D) = "" {}
-        // _Logo_Rotation_Scale_Offset("Logo rotation, scale, offset", Vector) = (24, 0.41, 0.19, -0.1)
+        [NonModifiableTextureData][NoScaleOffset] _LogoTex("Logo (MSDF)", 2D) = "" {}
+        // _Logo_Rotation_Scale_Offset("Logo rotation, scale, offset", Vector) = (23, 0.41, 0.19, -0.097)
         // _Logo_MSDF_Pixel_Range("Logo MSDF pixel range", Float) = 8
+        // _Logo_MSDF_Texture_Size("Logo MSDF texture size", Float) = 128
 
         [Header(Text)]
-        [NoScaleOffset] _FontTex("Font (MSDF)", 2D) = "" {}
+        [NonModifiableTextureData][NoScaleOffset] _FontTex("Font (MSDF)", 2D) = "" {}
         // _Font_MSDF_Pixel_Range("Font MSDF pixel range", Float) = 2
+        // _Font_MSDF_Texture_Size("Font MSDF texture size", Float) = 512
+        [LereldarionTextLines(_Text_LineCount)] _Text("Text", 2D) = "" {}
+        [HideInInspector] _Text_LineCount("Text line count", Integer) = 0
         _Font_Test_Character("Test character", Integer) = 0
         _Font_Test_Size("Test size", Float) = 1
     }
@@ -114,7 +118,7 @@ Shader "Lereldarion/ExplorerCard" {
 
             uniform Texture2D<float3> _LogoTex;
             uniform fixed4 _Logo_Color;
-            static const float4 _Logo_Rotation_Scale_Offset = float4(24, 0.41, 0.19, -0.1);
+            static const float4 _Logo_Rotation_Scale_Offset = float4(23, 0.41, 0.19, -0.097);
             static const float _Logo_MSDF_Pixel_Range = 8;
             static const float _Logo_MSDF_Texture_Size = 128;
 
