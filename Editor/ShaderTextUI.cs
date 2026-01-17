@@ -80,10 +80,16 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             font_metrics_cache = null;
             text_lines_cache = null;
 
+            // Locate metrics file
             string font_texture_path = AssetDatabase.GetAssetPath(font_texture);
-            Debug.Log($"Font asset path '{font_texture_path}'");
+            if(font_texture_path is null || font_texture_path == "") { gui_error = "Font texture is not defined / not a valid asset"; return; }
+            string metrics_path = System.IO.Path.ChangeExtension(font_texture_path, ".metrics.json");
+            TextAsset metrics_json = AssetDatabase.LoadAssetAtPath<TextAsset>(metrics_path);
+            if(metrics_json is null) { gui_error = $"Could not load font metrics at '{metrics_path}'"; return; }
 
-            // TODO load TextAsset json
+            // Load glyph data from JSON
+
+            // TODO
         }
 
         if (text_lines_cache is null)
