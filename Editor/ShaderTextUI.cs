@@ -1,6 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 // Usage : tag properties that encode text.
 // [LereldarionTextLines(_Text_LineCount, _FontTex)] _Text("Text", 2D) = "" {}
@@ -28,8 +29,8 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
     private Dictionary<char, Glyph> font_metrics_cache = null;
     private struct Glyph
     {
-
-    };
+        public int index; // In the texture, index is left to right, row by row from top to bottom.
+    }
 
     // Cached state of text system. Read from texture, store to texture.
     private List<Line> text_lines_cache = null;
@@ -39,8 +40,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         public float Size = 1;
         public Vector2 Position = Vector2.zero;
         public string Text;
-    };
-
+    }
 
     public LereldarionTextLinesDrawer(string line_count_property_name, string font_texture_property_name)
     {
@@ -82,14 +82,23 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
             // Locate metrics file
             string font_texture_path = AssetDatabase.GetAssetPath(font_texture);
-            if(font_texture_path is null || font_texture_path == "") { gui_error = "Font texture is not defined / not a valid asset"; return; }
+            if (font_texture_path is null || font_texture_path == "") { gui_error = "Font texture is not defined / not a valid asset"; return; }
             string metrics_path = System.IO.Path.ChangeExtension(font_texture_path, ".metrics.json");
             TextAsset metrics_json = AssetDatabase.LoadAssetAtPath<TextAsset>(metrics_path);
-            if(metrics_json is null) { gui_error = $"Could not load font metrics at '{metrics_path}'"; return; }
+            if (metrics_json is null) { gui_error = $"Could not open font metrics file at '{metrics_path}'"; return; }
 
-            // Load glyph data from JSON
+            // Load glyph data from JSON.
+            MetricsJSON msdf_atlas_metrics = JsonUtility.FromJson<MetricsJSON>(metrics_json.text);
+            if(msdf_atlas_metrics.glyphs.Length == 0) { gui_error = $"Could not parse font metrics from '{metrics_path}'"; return; }
 
-            // TODO
+            // Fill cached data.
+            // Assume list of glyph is left to right, row by row from top to bottom. This is the case in grid mode for now.
+            font_metrics_cache = new Dictionary<char, Glyph>();
+            for (int i = 0; i < msdf_atlas_metrics.glyphs.Length; i += 1)
+            {
+                var glyph = msdf_atlas_metrics.glyphs[i];
+                font_metrics_cache.Add((char)glyph.unicode, new Glyph { index = i }); // TODO useful metrics
+            }
         }
 
         if (text_lines_cache is null)
@@ -175,7 +184,11 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 text_lines_cache[i].Position = new_position;
 
                 string new_text = EditorGUI.TextField(gui_line_text, text_lines_cache[i].Text);
-                if (new_text != text_lines_cache[i].Text) { text_lines_cache_dirty = true; }
+                if (new_text != text_lines_cache[i].Text)
+                {
+                    var values = new_text.Select(c => font_metrics_cache[c].index).ToArray(); // FIXME test
+                    text_lines_cache_dirty = true;
+                }
                 text_lines_cache[i].Text = new_text;
             }
         }
@@ -190,5 +203,59 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         int text_line_count = text_lines_cache is not null ? text_lines_cache.Count : 0;
         return line_spacing * (1 + (gui_section_foldout ? 1 + text_line_count : 0));
     }
-}
 
+    // Matches structure of https://github.com/Chlumsky/msdf-atlas-gen metrics JSON output in grid mode.
+    [System.Serializable]
+    private struct MetricsJSON
+    {
+        public Atlas atlas;
+        public Metrics metrics;
+        public Glyph[] glyphs;
+
+        [System.Serializable]
+        public struct Atlas
+        {
+            public float distanceRange;
+            public float size;
+            public float width;
+            public float height;
+            public Grid grid;
+
+            [System.Serializable]
+            public struct Grid
+            {
+                public float cellWidth;
+                public float cellHeight;
+                public int columns;
+                public int rows;
+                public float originY;
+            }
+        }
+
+        [System.Serializable]
+        public struct Metrics
+        {
+            public float lineHeight;
+            public float ascender;
+            public float descender;
+        }
+
+        [System.Serializable]
+        public struct Glyph
+        {
+            public int unicode;
+            public float advance;
+            public Bounds planeBounds;
+            public Bounds atlasBounds;
+
+            [System.Serializable]
+            public struct Bounds
+            {
+                public float left;
+                public float bottom;
+                public float right;
+                public float top;
+            }
+        }
+    }
+}
