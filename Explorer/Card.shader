@@ -41,8 +41,8 @@ Shader "Lereldarion/ExplorerCard" {
         // _Logo_MSDF_Texture_Size("Logo MSDF texture size", Float) = 128
 
         [Header(Text)]
-        [LereldarionTextLines(_Text_LineCount)] _Text("Text", 2D) = "" {}
-        [HideInInspector] _Text_LineCount("Packages/lereldarion.card-system/Explorer/orbitron_msdf_font_metrics.json", Integer) = 0
+        [LereldarionTextLines(_Text_LineCount, _FontTex)] _TextTex("Text lines", 2D) = "" {}
+        [HideInInspector] _Text_LineCount("Text line count", Integer) = 0
         [HideInInspector] _FontTex("Font (MSDF)", 2D) = "" {}
         // _Font_MSDF_Pixel_Range("Font MSDF pixel range", Float) = 2
         // _Font_MSDF_Texture_Size("Font MSDF texture size", Float) = 512

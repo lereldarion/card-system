@@ -21,7 +21,9 @@ TODO
 - A custom `MaterialPropertyDrawer` enables ergonomic edition of the text line texture.
 
 # TODO
+- MaterialPropertyDrawer load glyph metadata
 - MaterialPropertyDrawer load/save to texture
+- MaterialPropertyDrawer + shader : when text cache dirty, switch to using vector array for lines positioning for editing feedback ?
 - instanced version ? requires tex2D array + fixed instanced id
 - Package release when operational
 - Back of the card
