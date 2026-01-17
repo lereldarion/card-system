@@ -5,10 +5,10 @@ ShaderImporter:
   defaultTextures:
   - _MainTex: {instanceID: 0}
   - _BackgroundTex: {instanceID: 0}
-  - _FontTex: {fileID: 2800000, guid: 6d2e437d4be2bee4d9bc101fe4547e7b, type: 3}
-  - _TextTex: {instanceID: 0}
+  - _Text: {instanceID: 0}
   nonModifiableTextures:
   - _LogoTex: {fileID: 2800000, guid: 5d9e718a0b751bd48b4a51e4a8fc529d, type: 3}
+  - _FontTex: {fileID: 2800000, guid: 92381300d8004a34496b1157cd2626fd, type: 3}
   userData: 
   assetBundleName: 
   assetBundleVariant: 

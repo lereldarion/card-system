@@ -9,20 +9,26 @@ using System.Collections.Generic;
 // Does not seem to work within a namespace. Use prefix instead for name collision avoidance.
 public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 {
+    // Values from shader property arguments
     private string line_count_property_name;
 
-    private bool text_config_foldout = true;
+    // Keep track of which material editor targets have been cached.
+    // Currently only one material can be selected at a time (multi-editing not allowed), but we keep track of the material set to detect selection change.
+    private Object[] current_material_array = null;
 
-    private Object[] cached_materials = null; // only one is cached, but track all to detect material set change
-    private List<Line> text_lines = null; // if null, error state
-    private bool properties_match_gui = false;
-
+    // Cached state of text system. Read from texture, store to texture.
     private class Line
     {
         public float Size = 1;
         public Vector2 Position = Vector2.zero;
         public string Text;
     };
+    private List<Line> text_lines = null; // if null, error state
+    private bool cached_state_dirty = true;
+
+    // GUI state
+    private bool text_config_foldout = true;
+
 
     public LereldarionTextLinesDrawer(string line_count_property_name_)
     {
@@ -32,14 +38,14 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
     private void LoadState(MaterialProperty text_prop, MaterialEditor editor)
     {
         // Do nothing if tracked materials are already cached.
-        if (editor.targets == cached_materials) { return; }
+        if (editor.targets == current_material_array) { return; }
 
-        cached_materials = editor.targets;
+        current_material_array = editor.targets;
         Material material = (Material)editor.target;
 
         // Flush
         text_lines = null;
-        properties_match_gui = false;
+        cached_state_dirty = true;
 
         // Validate state
         if (editor.targets.Length > 1) { Debug.LogWarning("LereldarionTextLinesDrawer does not support multi-editing"); return; }
@@ -47,7 +53,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         if (!material.HasInteger(line_count_property_name)) { Debug.LogError("LereldarionTextLinesDrawer argument must point to an Integer shader property (line count)", material.shader); return; }
 
         // Load props TODO
-        properties_match_gui = true;
+        cached_state_dirty = false;
         text_lines = new List<Line>();
     }
 
@@ -75,21 +81,22 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             return;
         }
 
-        // Header line
+        // Column positions
         Rect gui_list_button = new Rect(gui_full_line.x, gui_full_line.y, line_height, line_height);
         Rect gui_line_size = new Rect(gui_list_button.xMax + 1, gui_full_line.y, numeric_field_width, line_height);
         Rect gui_line_position = new Rect(gui_line_size.xMax + 1, gui_full_line.y, 2.5f * numeric_field_width, line_height);
         Rect gui_line_text = new Rect(gui_line_position.xMax + 1, gui_full_line.y, gui_full_line.xMax - gui_line_position.xMax, line_height);
 
+        // Header line
         if (GUI.Button(gui_list_button, "+"))
         {
             text_lines.Add(new Line());
-            properties_match_gui = false;
+            cached_state_dirty = true;
         }
         EditorGUI.LabelField(gui_line_size, "Size", centered);
         EditorGUI.LabelField(gui_line_position, "Position", centered);
         EditorGUI.LabelField(gui_line_text, "Text", centered);
-        if (!properties_match_gui)
+        if (cached_state_dirty)
         {
             if (GUI.Button(new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Save"))
             {
@@ -101,7 +108,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             }
         }
 
-        // Lines of text
+        // Lines of text metadata
         for (int i = 0; i < text_lines.Count; i += 1)
         {
             gui_list_button.y += line_spacing;
@@ -111,21 +118,21 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             if (GUI.Button(gui_list_button, "x"))
             {
                 text_lines.RemoveAt(i);
-                properties_match_gui = false;
+                cached_state_dirty = true;
                 i -= 1; // Fix iteration count
             }
             else
             {
                 float new_size = EditorGUI.FloatField(gui_line_size, text_lines[i].Size);
-                if (!Mathf.Approximately(new_size, text_lines[i].Size)) { properties_match_gui = false; }
+                if (!Mathf.Approximately(new_size, text_lines[i].Size)) { cached_state_dirty = true; }
                 text_lines[i].Size = new_size;
 
                 Vector2 new_position = EditorGUI.Vector2Field(gui_line_position, GUIContent.none, text_lines[i].Position);
-                if (new_position != text_lines[i].Position) { properties_match_gui = false ; }
+                if (new_position != text_lines[i].Position) { cached_state_dirty = true; }
                 text_lines[i].Position = new_position;
 
                 string new_text = EditorGUI.TextField(gui_line_text, text_lines[i].Text);
-                if(new_text != text_lines[i].Text) { properties_match_gui = false; }
+                if(new_text != text_lines[i].Text) { cached_state_dirty = true; }
                 text_lines[i].Text = new_text;
             }
         }
