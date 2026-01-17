@@ -4,7 +4,9 @@ using System.Collections.Generic;
 
 // Use case : tag a pair of properties that encode text.
 // [LereldarionTextLines(_Text_LineCount)] _Text("Text", 2D) = "" {}
-// [HideInInspector] _Text_LineCount("Text line count", Integer) = 0
+// [HideInInspector] _Text_LineCount("path/to/msdf_font_metrics.json", Integer) = 0
+//
+// We need to encode a full path in the shader, hence the reuse of the display name of _Text_LineCount which should be hidden.
 
 // Does not seem to work within a namespace. Use prefix instead for name collision avoidance.
 public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
@@ -16,23 +18,29 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
     // Currently only one material can be selected at a time (multi-editing not allowed), but we keep track of the material set to detect selection change.
     private Object[] current_material_array = null;
 
+    // Cached font metrics.
+    private Dictionary<char, Glyph> msdf_font_metrics = null;
+    private struct Glyph
+    {
+
+    };
+
     // Cached state of text system. Read from texture, store to texture.
+    private List<Line> text_lines = null; // if null, error state
+    private bool cached_state_dirty = true;
     private class Line
     {
         public float Size = 1;
         public Vector2 Position = Vector2.zero;
         public string Text;
     };
-    private List<Line> text_lines = null; // if null, error state
-    private bool cached_state_dirty = true;
 
     // GUI state
     private bool text_config_foldout = true;
 
-
-    public LereldarionTextLinesDrawer(string line_count_property_name_)
+    public LereldarionTextLinesDrawer(string argument)
     {
-        line_count_property_name = line_count_property_name_;
+        line_count_property_name = argument;
     }
 
     private void LoadState(MaterialProperty text_prop, MaterialEditor editor)
@@ -46,11 +54,18 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         // Flush
         text_lines = null;
         cached_state_dirty = true;
+        msdf_font_metrics = null;
 
         // Validate state
         if (editor.targets.Length > 1) { Debug.LogWarning("LereldarionTextLinesDrawer does not support multi-editing"); return; }
         if (text_prop.type != MaterialProperty.PropType.Texture) { Debug.LogError("LereldarionTextLinesDrawer must be applied to a texture 2D shader property", material.shader); return; }
         if (!material.HasInteger(line_count_property_name)) { Debug.LogError("LereldarionTextLinesDrawer argument must point to an Integer shader property (line count)", material.shader); return; }
+
+        // Load glyph tables
+        string msdf_atlas_font_metrics_path = MaterialEditor.GetMaterialProperty(editor.targets, line_count_property_name).displayName;
+        string guid = AssetDatabase.AssetPathToGUID(msdf_atlas_font_metrics_path);
+        Debug.Log($"Metrics GUID '{guid}'");
+        // TODO load json
 
         // Load props TODO
         cached_state_dirty = false;
@@ -132,7 +147,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 text_lines[i].Position = new_position;
 
                 string new_text = EditorGUI.TextField(gui_line_text, text_lines[i].Text);
-                if(new_text != text_lines[i].Text) { cached_state_dirty = true; }
+                if (new_text != text_lines[i].Text) { cached_state_dirty = true; }
                 text_lines[i].Text = new_text;
             }
         }
