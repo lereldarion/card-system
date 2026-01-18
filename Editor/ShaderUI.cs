@@ -3,13 +3,14 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 
-// Usage : tag properties that encode text.
-// [LereldarionTextLines(_FontTex, _Font_Config, _Text_LineCount)] _Text("Text", 2D) = "" {}
-// _FontTex("Font (MSDF)", 2D) = "" {}
-// _Font_Config("Font config values", Vector) = (0, 0, 0, 0)
-// _Text_LineCount("Text line count", Integer) = 0 // usually hidden with [HideInInspector]
+// Usage : tag a set of properties that encode text.
 //
-// _FontTex texture asset (path/to/font_texture.<ext>) must have a companion path/to/font_texture.metrics.json with glyph metadata.
+// [LereldarionTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
+// _Text_LineCount("Text line count", Integer) = 0
+// _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
+// _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
+//
+// _Text_Encoding_Texture texture asset (path/to/font_texture.<ext>) must have a companion path/to/font_texture.metrics.json with glyph metadata.
 
 // Does not seem to work within a namespace. Use prefix instead for name collision avoidance.
 public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
@@ -19,30 +20,19 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
     private readonly string font_config_property_name = null;
     private readonly string line_count_property_name = null;
 
+    // Caching state. Avoid reloading font metrics and text everytime.
+    // Keep track of what was already validated or error.
+    private CachedState cache_state = CachedState.None;
+    private enum CachedState { None, SelectionAndShaderProperties, Font, Text }
+    private Object[] current_material_selection = null; // multi-editing not supported but track the selection for proper detection
+    private Texture current_font_texture = null;
+    private Font font = null;
+    private Texture current_encoding_texture = null;
+    private LineCache line_cache;
+
     // GUI state
     private bool gui_section_foldout = true;
-    private string gui_error = null;
-
-    // Cache keys : keep track of the configuration the drawer looks at, to detect change and reload the cached data.
-    private Object[] current_material_array = null; // multi-editing not supported but track the selection for proper detection
-    private Texture current_font_texture = null;
-
-    // Cached font metrics.
-    private Dictionary<char, Glyph> font_metrics_cache = null;
-    private struct Glyph
-    {
-        public int index; // In the texture, index is left to right, row by row from top to bottom.
-    }
-
-    // Cached state of text system. Read from texture, store to texture.
-    private List<Line> text_lines_cache = null;
-    private bool text_lines_cache_dirty = true;
-    private class Line
-    {
-        public float Size = 1;
-        public Vector2 Position = Vector2.zero;
-        public string Text;
-    }
+    private string gui_error = "";
 
     public LereldarionTextLinesDrawer(string font_texture_property_name, string font_config_property_name, string line_count_property_name)
     {
@@ -54,61 +44,62 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
     private void LoadState(MaterialProperty text_prop, MaterialEditor editor)
     {
-        if (editor.targets != current_material_array)
+        Material material = (Material)editor.target;
+
+        if (editor.targets != current_material_selection)
         {
-            current_material_array = editor.targets;
+            cache_state = CachedState.None;
+            current_material_selection = editor.targets;
 
-            // Flush cached data due to selection change
-            gui_error = null;
+            if (editor.targets.Length > 1) { gui_error = "Multi-editing is not supported"; return; }
 
-            text_lines_cache = null;
+            // Shader sanity check, once per material change.
+            // Shader modification forces reloading the drawer class for a recheck, no need to check for shader change.
+            if (text_prop.type != MaterialProperty.PropType.Texture) { gui_error = "[LereldarionTextLines(...)] must be applied to a Texture2D shader property"; return; }
+            if (!material.HasTexture(font_texture_property_name)) { gui_error = "LereldarionTextLines(font_texture_property_name, _, _) must point to a Texture shader property"; return; }
+            if (!material.HasVector(font_config_property_name)) { gui_error = "LereldarionTextLines(_, font_config_property_name, _) must point to an Vector shader property"; return; }
+            if (!material.HasInteger(line_count_property_name)) { gui_error = "LereldarionTextLines(_, _, line_count_property_name) must point to an Integer shader property"; return; }
 
-            current_font_texture = null;
-            font_metrics_cache = null;
+            cache_state = CachedState.SelectionAndShaderProperties;
         }
 
-        if (editor.targets.Length > 1) { gui_error = "Multi-editing is not supported"; return; }
-
-        // Shader sanity check. Shader modification should force reloading the drawer class, no need to invalidate cache manually.
-        Material material = (Material)editor.target;
-        if (text_prop.type != MaterialProperty.PropType.Texture) { gui_error = "[LereldarionTextLines(...)] must be applied to a Texture2D shader property"; return; }
-        if (!material.HasInteger(line_count_property_name)) { gui_error = "LereldarionTextLines(line_count_property, ...) must point to an Integer shader property"; return; }
-        if (!material.HasTexture(font_texture_property_name)) { gui_error = "LereldarionTextLines(..., font_texture_property) must point to a Texture shader property"; return; }
-
-        // Font metrics cache
-        Texture font_texture = material.GetTexture(font_texture_property_name);
-        if (font_texture != current_font_texture)
+        if (cache_state >= CachedState.SelectionAndShaderProperties)
         {
-            current_font_texture = font_texture;
-            font_metrics_cache = null;
-            text_lines_cache = null;
-
-            // Locate metrics file
-            string font_texture_path = AssetDatabase.GetAssetPath(font_texture);
-            if (font_texture_path is null || font_texture_path == "") { gui_error = "Font texture is not defined / not a valid asset"; return; }
-            string metrics_path = System.IO.Path.ChangeExtension(font_texture_path, ".metrics.json");
-            TextAsset metrics_json = AssetDatabase.LoadAssetAtPath<TextAsset>(metrics_path);
-            if (metrics_json is null) { gui_error = $"Could not open font metrics file at '{metrics_path}'"; return; }
-
-            // Load glyph data from JSON.
-            MetricsJSON msdf_atlas_metrics = JsonUtility.FromJson<MetricsJSON>(metrics_json.text);
-            if(msdf_atlas_metrics.glyphs.Length == 0) { gui_error = $"Could not parse font metrics from '{metrics_path}'"; return; }
-
-            // Fill cached data.
-            // Assume list of glyph is left to right, row by row from top to bottom. This is the case in grid mode for now.
-            font_metrics_cache = new Dictionary<char, Glyph>();
-            for (int i = 0; i < msdf_atlas_metrics.glyphs.Length; i += 1)
+            Texture font_texture = material.GetTexture(font_texture_property_name);
+            if (current_font_texture != font_texture || cache_state == CachedState.SelectionAndShaderProperties)
             {
-                var glyph = msdf_atlas_metrics.glyphs[i];
-                font_metrics_cache.Add((char)glyph.unicode, new Glyph { index = i }); // TODO useful metrics
+                cache_state = CachedState.SelectionAndShaderProperties;
+                current_font_texture = font_texture;
+
+                // Load metrics file
+                if (font_texture is null) { gui_error = "Font texture is not defined"; return; }
+                string font_texture_path = AssetDatabase.GetAssetPath(font_texture);
+                if (font_texture_path is null || font_texture_path == "") { gui_error = "Font texture is not a valid asset"; return; }
+                string metrics_path = System.IO.Path.ChangeExtension(font_texture_path, ".metrics.json");
+                TextAsset metrics_json = AssetDatabase.LoadAssetAtPath<TextAsset>(metrics_path);
+                if (metrics_json is null) { gui_error = $"Could not open font metrics file at '{metrics_path}'"; return; }
+
+                // Load glyph data from JSON.
+                MetricsJSON msdf_atlas_metrics = JsonUtility.FromJson<MetricsJSON>(metrics_json.text);
+                if (msdf_atlas_metrics.glyphs.Length == 0) { gui_error = $"Could not parse font metrics from '{metrics_path}'"; return; }
+
+                font = new Font(msdf_atlas_metrics);
+                cache_state = CachedState.Font;
             }
         }
 
-        if (text_lines_cache is null)
+        if (cache_state >= CachedState.Font)
         {
-            // Load text lines from texture TODO
-            text_lines_cache = new List<Line>();
-            text_lines_cache_dirty = false;
+            Texture encoding_texture = text_prop.textureValue;
+            if (current_encoding_texture != encoding_texture || cache_state == CachedState.Font)
+            {
+                cache_state = CachedState.Font;
+                current_encoding_texture = encoding_texture;
+
+                line_cache = new LineCache(encoding_texture, font);
+                cache_state = CachedState.Text;
+                gui_error = "";
+            }
         }
     }
 
@@ -120,8 +111,15 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
         // Style
         Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_height);
-        GUIStyle style_centered = new GUIStyle(EditorStyles.label); style_centered.alignment = TextAnchor.MiddleCenter;
-        GUIStyle style_error = new GUIStyle(style_centered); style_error.richText = true;
+        GUIStyle style_label_centered = new GUIStyle(EditorStyles.label); style_label_centered.alignment = TextAnchor.MiddleCenter;
+        GUIStyle invalid_text_field = new GUIStyle(EditorStyles.textField);
+        invalid_text_field.active.textColor = Color.red;
+        invalid_text_field.focused.textColor = Color.red;
+        invalid_text_field.normal.textColor = Color.red;
+        invalid_text_field.onActive.textColor = Color.red;
+        invalid_text_field.onFocused.textColor = Color.red;
+        invalid_text_field.onHover.textColor = Color.red;
+        invalid_text_field.onNormal.textColor = Color.red;
         float numeric_field_width = 3 * line_height;
 
         // Section folding
@@ -130,9 +128,11 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         gui_full_line.y += line_spacing;
 
         // Header line in case of error
-        if (gui_error is not null)
+        if (cache_state != CachedState.Text)
         {
-            EditorGUI.LabelField(gui_full_line, $"<color=red>{gui_error}</color>", style_error);
+            GUIStyle style = new GUIStyle(EditorStyles.label);
+            style.normal.textColor = Color.red;
+            EditorGUI.LabelField(gui_full_line, gui_error, style);
             return;
         }
 
@@ -143,28 +143,24 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         Rect gui_line_text = new Rect(gui_line_position.xMax + 1, gui_full_line.y, gui_full_line.xMax - gui_line_position.xMax, line_height);
 
         // Header line
-        if (GUI.Button(gui_list_button, "+"))
-        {
-            text_lines_cache.Add(new Line());
-            text_lines_cache_dirty = true;
-        }
-        EditorGUI.LabelField(gui_line_size, "Size", style_centered);
-        EditorGUI.LabelField(gui_line_position, "Position", style_centered);
-        EditorGUI.LabelField(gui_line_text, "Text", style_centered);
-        if (text_lines_cache_dirty)
+        if (GUI.Button(gui_list_button, "+")) { line_cache.Add(); }
+        EditorGUI.LabelField(gui_line_size, "Size", style_label_centered);
+        EditorGUI.LabelField(gui_line_position, "Position", style_label_centered);
+        EditorGUI.LabelField(gui_line_text, "Text", style_label_centered);
+        if (line_cache.Dirty)
         {
             if (GUI.Button(new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Save"))
             {
-                // TODO save
+                // TODO save. Gen texture AND set properties
             }
             if (GUI.Button(new Rect(gui_line_text.x + 0.8f * gui_line_text.width, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Reset"))
             {
-                // TODO reset
+                line_cache = new LineCache(current_encoding_texture, font);
             }
         }
 
         // Lines of text metadata
-        for (int i = 0; i < text_lines_cache.Count; i += 1)
+        for (int i = 0; i < line_cache.Lines.Count; i += 1)
         {
             gui_list_button.y += line_spacing;
             gui_line_size.y += line_spacing;
@@ -172,27 +168,15 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             gui_line_text.y += line_spacing;
             if (GUI.Button(gui_list_button, "x"))
             {
-                text_lines_cache.RemoveAt(i);
-                text_lines_cache_dirty = true;
+                line_cache.RemoveAt(i);
                 i -= 1; // Fix iteration count
             }
             else
             {
-                float new_size = EditorGUI.FloatField(gui_line_size, text_lines_cache[i].Size);
-                if (!Mathf.Approximately(new_size, text_lines_cache[i].Size)) { text_lines_cache_dirty = true; }
-                text_lines_cache[i].Size = new_size;
-
-                Vector2 new_position = EditorGUI.Vector2Field(gui_line_position, GUIContent.none, text_lines_cache[i].Position);
-                if (new_position != text_lines_cache[i].Position) { text_lines_cache_dirty = true; }
-                text_lines_cache[i].Position = new_position;
-
-                string new_text = EditorGUI.TextField(gui_line_text, text_lines_cache[i].Text);
-                if (new_text != text_lines_cache[i].Text)
-                {
-                    var values = new_text.Select(c => font_metrics_cache[c].index).ToArray(); // FIXME test
-                    text_lines_cache_dirty = true;
-                }
-                text_lines_cache[i].Text = new_text;
+                line_cache.SetLineSize(i, EditorGUI.FloatField(gui_line_size, line_cache.Lines[i].Size));
+                line_cache.SetLinePosition(i, EditorGUI.Vector2Field(gui_line_position, GUIContent.none, line_cache.Lines[i].Position));
+                GUIStyle style = font.IsRepresentable(line_cache.Lines[i].Text) ? EditorStyles.textField : invalid_text_field;
+                line_cache.SetLineText(i, EditorGUI.TextField(gui_line_text, line_cache.Lines[i].Text, style));
             }
         }
     }
@@ -203,8 +187,84 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         float line_spacing = line_height + 1;
         LoadState(prop, editor);
 
-        int text_line_count = text_lines_cache is not null ? text_lines_cache.Count : 0;
+        int text_line_count = cache_state == CachedState.Text ? line_cache.Lines.Count : 0;
         return line_spacing * (1 + (gui_section_foldout ? 1 + text_line_count : 0));
+    }
+
+    private class LineCache
+    {
+        // Cached state of text system. Read from texture, store to texture.
+        private List<Line> lines;
+        private bool dirty = false;
+
+        public List<Line> Lines { get { return lines; } }
+        public bool Dirty { get { return dirty; } }
+
+        public LineCache(Texture encoding, Font font)
+        {
+            lines = new List<Line>();
+            dirty = false;
+        }
+
+        public void Add()
+        {
+            lines.Add(new Line());
+            dirty = true;
+        }
+        public void RemoveAt(int i)
+        {
+            lines.RemoveAt(i);
+            dirty = true;
+        }
+        public void SetLineSize(int i, float size)
+        {
+            dirty = dirty || !Mathf.Approximately(lines[i].Size, size);
+            lines[i].Size = size;
+        }
+        public void SetLinePosition(int i, Vector2 position)
+        {
+            dirty = dirty || lines[i].Position != position;
+            lines[i].Position = position;
+        }
+        public void SetLineText(int i, string text)
+        {
+            dirty = dirty || lines[i].Text != text;
+            lines[i].Text = text;
+        }
+
+        public class Line
+        {
+            public float Size = 1;
+            public Vector2 Position = Vector2.zero;
+            public string Text = "";
+        }
+    }
+
+    private class Font
+    {
+        // In the texture, index is left to right, row by row from top to bottom.
+        public readonly List<Glyph> glyphs;
+        public readonly Dictionary<char, int> char_to_glyph;
+
+        public struct Glyph
+        {
+            public char character;
+        }
+
+        public Font(MetricsJSON metrics)
+        {
+            glyphs = new List<Glyph>();
+            char_to_glyph = new Dictionary<char, int>();
+            for (int i = 0; i < metrics.glyphs.Length; i += 1)
+            {
+                var glyph = metrics.glyphs[i];
+                glyphs.Add(new Glyph { character = (char)glyph.unicode });
+                char_to_glyph.Add((char)glyph.unicode, i);
+                // TODO useful metrics
+            }
+        }
+
+        public bool IsRepresentable(string text) { return text.All(c => char_to_glyph.ContainsKey(c)); }
     }
 
     // Matches structure of https://github.com/Chlumsky/msdf-atlas-gen metrics JSON output in grid mode.
@@ -218,6 +278,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         [System.Serializable]
         public struct Atlas
         {
+            // Pixel space
             public float distanceRange;
             public float size;
             public float width;
@@ -231,13 +292,15 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 public float cellHeight;
                 public int columns;
                 public int rows;
-                public float originY;
+                public float originY; // EM space ?
             }
         }
 
         [System.Serializable]
         public struct Metrics
         {
+            // EM space
+            public float emSize;
             public float lineHeight;
             public float ascender;
             public float descender;
@@ -247,9 +310,9 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         public struct Glyph
         {
             public int unicode;
-            public float advance;
-            public Bounds planeBounds;
-            public Bounds atlasBounds;
+            public float advance; // EM space
+            public Bounds planeBounds; // EM space
+            public Bounds atlasBounds; // Pixel space
 
             [System.Serializable]
             public struct Bounds

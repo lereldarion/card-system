@@ -42,9 +42,9 @@ Shader "Lereldarion/ExplorerCard" {
 
         [Header(Text)]
         [LereldarionTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
+        _Text_LineCount("Text line count", Integer) = 0
         _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
         _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
-        _Text_LineCount("Text line count", Integer) = 0
 
         _Font_Test_Character("Test character", Integer) = 0
         _Font_Test_Size("Test size", Float) = 1
