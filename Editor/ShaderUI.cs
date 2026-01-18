@@ -113,7 +113,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_height);
         GUIStyle style_label_centered = new GUIStyle(EditorStyles.label); style_label_centered.alignment = TextAnchor.MiddleCenter;
         GUIStyle invalid_text_field = StyleWithRedText(EditorStyles.textField);
-        float numeric_field_width = 3 * line_height;
+        float numeric_field_width = 4 * line_height;
 
         // Section folding
         gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, label);
@@ -131,14 +131,13 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
         // Column positions
         Rect gui_list_button = new Rect(gui_full_line.x, gui_full_line.y, line_height, line_height);
-        Rect gui_line_size = new Rect(gui_list_button.xMax + 1, gui_full_line.y, numeric_field_width, line_height);
-        Rect gui_line_position = new Rect(gui_line_size.xMax + 1, gui_full_line.y, 2.5f * numeric_field_width, line_height);
-        Rect gui_line_text = new Rect(gui_line_position.xMax + 1, gui_full_line.y, gui_full_line.xMax - gui_line_position.xMax, line_height);
+        Rect gui_line_position_size = new Rect(gui_list_button.xMax + 1, gui_full_line.y, 3 * numeric_field_width, line_height);
+        Rect gui_line_text = new Rect(gui_line_position_size.xMax + 1, gui_full_line.y, gui_full_line.xMax - gui_line_position_size.xMax, line_height);
 
         // Header line
         if (GUI.Button(gui_list_button, "+")) { line_cache.Add(); }
-        EditorGUI.LabelField(gui_line_size, "Size", style_label_centered);
-        EditorGUI.LabelField(gui_line_position, "Position", style_label_centered);
+        EditorGUI.LabelField(new Rect(gui_line_position_size.x, gui_line_position_size.y, 2 * numeric_field_width, line_height), "Position", style_label_centered);
+        EditorGUI.LabelField(new Rect(gui_line_position_size.x + 2 * numeric_field_width, gui_line_position_size.y, numeric_field_width, line_height), "Size", style_label_centered);
         EditorGUI.LabelField(gui_line_text, "Text", style_label_centered);
         if (line_cache.Dirty)
         {
@@ -158,8 +157,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         for (int i = 0; i < line_cache.Lines.Count; i += 1)
         {
             gui_list_button.y += line_spacing;
-            gui_line_size.y += line_spacing;
-            gui_line_position.y += line_spacing;
+            gui_line_position_size.y += line_spacing;
             gui_line_text.y += line_spacing;
             if (GUI.Button(gui_list_button, "x"))
             {
@@ -168,8 +166,8 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             }
             else
             {
-                line_cache.SetLineSize(i, EditorGUI.FloatField(gui_line_size, line_cache.Lines[i].size));
-                line_cache.SetLinePosition(i, EditorGUI.Vector2Field(gui_line_position, GUIContent.none, line_cache.Lines[i].position));
+                // Combine position & size to use the ergonomic Vector3Field GUI element : XYZ labels allow changing value smoothly with mouse.
+                line_cache.SetLinePositionSize(i, EditorGUI.Vector3Field(gui_line_position_size, GUIContent.none, line_cache.Lines[i].PositionSize));
                 GUIStyle style = line_cache.Lines[i].representable ? EditorStyles.textField : invalid_text_field;
                 line_cache.SetLineText(i, EditorGUI.TextField(gui_line_text, line_cache.Lines[i].text, style));
             }
@@ -213,15 +211,10 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             lines.RemoveAt(i);
             dirty = true;
         }
-        public void SetLineSize(int i, float size)
+        public void SetLinePositionSize(int i, Vector3 position_size)
         {
-            dirty = dirty || !Mathf.Approximately(lines[i].size, size);
-            lines[i].size = size;
-        }
-        public void SetLinePosition(int i, Vector2 position)
-        {
-            dirty = dirty || lines[i].position != position;
-            lines[i].position = position;
+            dirty = dirty || lines[i].PositionSize != position_size;
+            lines[i].PositionSize = position_size;
         }
         public void SetLineText(int i, string text)
         {
@@ -235,8 +228,9 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
         public class Line
         {
-            public float size = 1;
-            public Vector2 position = Vector2.zero;
+            public Vector3 PositionSize = new Vector3(0, 0, 1);
+            public float Size { get => PositionSize.z; }
+            public Vector2 Position { get => PositionSize; }
             public string text = "";
             public bool representable = true;
         }
@@ -263,6 +257,9 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 glyphs.Add(new Glyph { character = (char)glyph.unicode });
                 char_to_glyph.Add((char)glyph.unicode, i);
                 // TODO useful metrics
+                float center = -glyph.planeBounds.left + glyph.advance / 2;
+                float ratio = center / (glyph.planeBounds.right - glyph.planeBounds.left);
+                //Debug.Log($"{center} ; {ratio}");
             }
         }
 
@@ -313,7 +310,11 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         {
             public int unicode;
             public float advance; // EM space
-            public Bounds planeBounds; // EM space
+            // EM space.
+            // Top & bottom same for all grid glyphs. 
+            // |left| + advance/2 approximately conserved for all glyphs, at around 50% of |left| + right.
+            // (-left, -bottom) is the origin point of the glyph in EM-space, advance the width.
+            public Bounds planeBounds;
             public Bounds atlasBounds; // Pixel space
 
             [System.Serializable]
