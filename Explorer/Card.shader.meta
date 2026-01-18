@@ -3,11 +3,12 @@ guid: f4be20c55be43564b90551108fd7fe9d
 ShaderImporter:
   externalObjects: {}
   defaultTextures:
-  - _MainTex: {instanceID: 0}
-  - _BackgroundTex: {instanceID: 0}
-  - _LogoTex: {fileID: 2800000, guid: 5d9e718a0b751bd48b4a51e4a8fc529d, type: 3}
-  - _TextTex: {instanceID: 0}
-  - _FontTex: {fileID: 2800000, guid: 92381300d8004a34496b1157cd2626fd, type: 3}
+  - _Foreground_Texture: {instanceID: 0}
+  - _Background_Texture: {instanceID: 0}
+  - _Logo_Texture: {fileID: 2800000, guid: 5d9e718a0b751bd48b4a51e4a8fc529d, type: 3}
+  - _Text_Encoding_Texture: {instanceID: 0}
+  - _Font_MSDF_Atlas_Texture: {fileID: 2800000, guid: 92381300d8004a34496b1157cd2626fd,
+      type: 3}
   nonModifiableTextures: []
   userData: 
   assetBundleName: 

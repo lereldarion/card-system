@@ -4,9 +4,10 @@ using System.Collections.Generic;
 using System.Linq;
 
 // Usage : tag properties that encode text.
-// [LereldarionTextLines(_Text_LineCount, _FontTex)] _Text("Text", 2D) = "" {}
-// _Text_LineCount("Text line count", Integer) = 0 // usually hidden with [HideInInspector]
+// [LereldarionTextLines(_FontTex, _Font_Config, _Text_LineCount)] _Text("Text", 2D) = "" {}
 // _FontTex("Font (MSDF)", 2D) = "" {}
+// _Font_Config("Font config values", Vector) = (0, 0, 0, 0)
+// _Text_LineCount("Text line count", Integer) = 0 // usually hidden with [HideInInspector]
 //
 // _FontTex texture asset (path/to/font_texture.<ext>) must have a companion path/to/font_texture.metrics.json with glyph metadata.
 
@@ -14,8 +15,9 @@ using System.Linq;
 public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 {
     // Values from shader property arguments
-    private readonly string line_count_property_name = null;
     private readonly string font_texture_property_name = null;
+    private readonly string font_config_property_name = null;
+    private readonly string line_count_property_name = null;
 
     // GUI state
     private bool gui_section_foldout = true;
@@ -42,11 +44,12 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         public string Text;
     }
 
-    public LereldarionTextLinesDrawer(string line_count_property_name, string font_texture_property_name)
+    public LereldarionTextLinesDrawer(string font_texture_property_name, string font_config_property_name, string line_count_property_name)
     {
         // Unity already splits by ',' and trims whitespace
-        this.line_count_property_name = line_count_property_name;
         this.font_texture_property_name = font_texture_property_name;
+        this.font_config_property_name = font_config_property_name;
+        this.line_count_property_name = line_count_property_name;
     }
 
     private void LoadState(MaterialProperty text_prop, MaterialEditor editor)
