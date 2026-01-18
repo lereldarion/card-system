@@ -112,14 +112,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         // Style
         Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_height);
         GUIStyle style_label_centered = new GUIStyle(EditorStyles.label); style_label_centered.alignment = TextAnchor.MiddleCenter;
-        GUIStyle invalid_text_field = new GUIStyle(EditorStyles.textField);
-        invalid_text_field.active.textColor = Color.red;
-        invalid_text_field.focused.textColor = Color.red;
-        invalid_text_field.normal.textColor = Color.red;
-        invalid_text_field.onActive.textColor = Color.red;
-        invalid_text_field.onFocused.textColor = Color.red;
-        invalid_text_field.onHover.textColor = Color.red;
-        invalid_text_field.onNormal.textColor = Color.red;
+        GUIStyle invalid_text_field = StyleWithRedText(EditorStyles.textField);
         float numeric_field_width = 3 * line_height;
 
         // Section folding
@@ -149,7 +142,9 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         EditorGUI.LabelField(gui_line_text, "Text", style_label_centered);
         if (line_cache.Dirty)
         {
-            if (GUI.Button(new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Save"))
+            bool all_lines_representable = line_cache.Lines.All(line => line.representable);
+            GUIStyle style = all_lines_representable ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
+            if (GUI.Button(new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Save", style) && all_lines_representable)
             {
                 // TODO save. Gen texture AND set properties
             }
@@ -173,10 +168,10 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             }
             else
             {
-                line_cache.SetLineSize(i, EditorGUI.FloatField(gui_line_size, line_cache.Lines[i].Size));
-                line_cache.SetLinePosition(i, EditorGUI.Vector2Field(gui_line_position, GUIContent.none, line_cache.Lines[i].Position));
-                GUIStyle style = font.IsRepresentable(line_cache.Lines[i].Text) ? EditorStyles.textField : invalid_text_field;
-                line_cache.SetLineText(i, EditorGUI.TextField(gui_line_text, line_cache.Lines[i].Text, style));
+                line_cache.SetLineSize(i, EditorGUI.FloatField(gui_line_size, line_cache.Lines[i].size));
+                line_cache.SetLinePosition(i, EditorGUI.Vector2Field(gui_line_position, GUIContent.none, line_cache.Lines[i].position));
+                GUIStyle style = line_cache.Lines[i].representable ? EditorStyles.textField : invalid_text_field;
+                line_cache.SetLineText(i, EditorGUI.TextField(gui_line_text, line_cache.Lines[i].text, style));
             }
         }
     }
@@ -196,6 +191,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         // Cached state of text system. Read from texture, store to texture.
         private List<Line> lines;
         private bool dirty = false;
+        private Font font;
 
         public List<Line> Lines { get { return lines; } }
         public bool Dirty { get { return dirty; } }
@@ -204,6 +200,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         {
             lines = new List<Line>();
             dirty = false;
+            this.font = font;
         }
 
         public void Add()
@@ -218,25 +215,30 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         }
         public void SetLineSize(int i, float size)
         {
-            dirty = dirty || !Mathf.Approximately(lines[i].Size, size);
-            lines[i].Size = size;
+            dirty = dirty || !Mathf.Approximately(lines[i].size, size);
+            lines[i].size = size;
         }
         public void SetLinePosition(int i, Vector2 position)
         {
-            dirty = dirty || lines[i].Position != position;
-            lines[i].Position = position;
+            dirty = dirty || lines[i].position != position;
+            lines[i].position = position;
         }
         public void SetLineText(int i, string text)
         {
-            dirty = dirty || lines[i].Text != text;
-            lines[i].Text = text;
+            if (lines[i].text != text)
+            {
+                dirty = true;
+                lines[i].text = text;
+                lines[i].representable = font.IsRepresentable(text);
+            }
         }
 
         public class Line
         {
-            public float Size = 1;
-            public Vector2 Position = Vector2.zero;
-            public string Text = "";
+            public float size = 1;
+            public Vector2 position = Vector2.zero;
+            public string text = "";
+            public bool representable = true;
         }
     }
 
@@ -323,5 +325,19 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 public float top;
             }
         }
+    }
+
+    static private GUIStyle StyleWithRedText(GUIStyle model)
+    {
+        var style = new GUIStyle(model);
+        style.active.textColor = Color.red;
+        style.focused.textColor = Color.red;
+        style.hover.textColor = Color.red;
+        style.normal.textColor = Color.red;
+        style.onActive.textColor = Color.red;
+        style.onFocused.textColor = Color.red;
+        style.onHover.textColor = Color.red;
+        style.onNormal.textColor = Color.red;
+        return style;
     }
 }
