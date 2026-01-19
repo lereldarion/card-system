@@ -2,6 +2,7 @@ using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using System;
 
 // Usage : tag a set of properties that encode text.
 //
@@ -24,7 +25,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
     // Keep track of what was already validated or error.
     private CachedState cache_state = CachedState.None;
     private enum CachedState { None, SelectionAndShaderProperties, Font, Text }
-    private Object[] current_material_selection = null; // multi-editing not supported but track the selection for proper detection
+    private UnityEngine.Object[] current_material_selection = null; // multi-editing not supported but track the selection for proper detection
     private Texture current_font_texture = null;
     private Font font = null;
     private Texture current_encoding_texture = null;
@@ -83,7 +84,8 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 MetricsJSON msdf_atlas_metrics = JsonUtility.FromJson<MetricsJSON>(metrics_json.text);
                 if (msdf_atlas_metrics.glyphs.Length == 0) { gui_error = $"Could not parse font metrics from '{metrics_path}'"; return; }
 
-                font = new Font(msdf_atlas_metrics);
+                try { font = new Font(msdf_atlas_metrics); }
+                catch (Exception e) { gui_error = $"Failed to load font {metrics_path}: {e.Message}"; }
                 cache_state = CachedState.Font;
             }
         }
@@ -238,64 +240,103 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
     private class Font
     {
-        // In the texture, index is left to right, row by row from top to bottom.
-        public readonly List<Glyph> glyphs;
-        public readonly Dictionary<char, int> char_to_glyph;
+        // Using MSDF atlas in uniform grid mode.
+        public readonly Vector2Int atlas_pixel_size;
+        public readonly Vector2Int grid_size;
+        public readonly Vector2Int grid_cell_size;
+        // Glyph data. Glyph atlas id indexing is left to right, row by row from top to bottom.
+        public readonly Glyph[] glyphs;
+        public readonly Dictionary<char, int> char_to_atlas_id;
+        // Space has no glyph in the atlas, but still has a metrics entry
+        public readonly float space_advance_em;
 
         public struct Glyph
         {
             public char character;
+            public float advance_em;
         }
 
         public Font(MetricsJSON metrics)
         {
-            glyphs = new List<Glyph>();
-            char_to_glyph = new Dictionary<char, int>();
-            for (int i = 0; i < metrics.glyphs.Length; i += 1)
+            atlas_pixel_size = new Vector2Int(metrics.atlas.width, metrics.atlas.height);
+            grid_size = new Vector2Int(metrics.atlas.grid.columns, metrics.atlas.grid.rows);
+            grid_cell_size = new Vector2Int(metrics.atlas.grid.cellWidth, metrics.atlas.grid.cellHeight);
+            if (atlas_pixel_size == Vector2Int.zero || grid_size == Vector2Int.zero || grid_cell_size == Vector2Int.zero)
             {
-                var glyph = metrics.glyphs[i];
-                glyphs.Add(new Glyph { character = (char)glyph.unicode });
-                char_to_glyph.Add((char)glyph.unicode, i);
-                // TODO useful metrics
-                float center = -glyph.planeBounds.left + glyph.advance / 2;
-                float ratio = center / (glyph.planeBounds.right - glyph.planeBounds.left);
-                //Debug.Log($"{center} ; {ratio}");
+                throw new Exception("msdf-atlas-gen font must be in uniform grid mode");
+            }
+            if (metrics.atlas.yOrigin != "bottom") { throw new Exception("msdf-atlas-gen font must be with y-origin=bottom"); }
+
+            glyphs = new Glyph[grid_size.x * grid_size.y];
+            char_to_atlas_id = new Dictionary<char, int>();
+
+            foreach (var glyph in metrics.glyphs)
+            {
+                char character = (char)glyph.unicode;
+
+                if (glyph.planeBounds.Size() == Vector2.zero)
+                {
+                    if (character == ' ')
+                    {
+                        space_advance_em = glyph.advance;
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"LereldarionTextLinesDrawer: font loading: ignoring character with no glyph: '{character}' (code {glyph.unicode})");
+                    }
+                }
+                else
+                {
+                    // Glyphs are seen in atlas id order, but recompute it anyway.
+                    // This protects against holes (like space) and future packing change.
+                    Vector2 atlas_glyph_center = glyph.atlasBounds.Center();
+                    atlas_glyph_center.y = atlas_pixel_size.y - atlas_glyph_center.y; // put origin on top
+                    Vector2Int cell_position = Vector2Int.FloorToInt(atlas_glyph_center / grid_cell_size);
+                    int atlas_id = cell_position.y * grid_size.x + cell_position.x;
+
+                    // TODO other useful metrics
+                    float center = -glyph.planeBounds.left + glyph.advance / 2;
+                    float ratio = center / (glyph.planeBounds.right - glyph.planeBounds.left);
+
+                    glyphs[atlas_id] = new Glyph { character = character, advance_em = glyph.advance };
+                    char_to_atlas_id.Add(character, atlas_id);
+                }
             }
         }
 
-        public bool IsRepresentable(string text) { return text.All(c => char_to_glyph.ContainsKey(c)); }
+        public bool IsRepresentable(string text) { return text.All(c => char_to_atlas_id.ContainsKey(c) || c == ' '); }
     }
 
     // Matches structure of https://github.com/Chlumsky/msdf-atlas-gen metrics JSON output in grid mode.
-    [System.Serializable]
+    [Serializable]
     private struct MetricsJSON
     {
         public Atlas atlas;
         public Metrics metrics;
         public Glyph[] glyphs;
 
-        [System.Serializable]
+        [Serializable]
         public struct Atlas
         {
             // Pixel space
             public float distanceRange;
             public float size;
-            public float width;
-            public float height;
+            public int width;
+            public int height;
+            public string yOrigin;
             public Grid grid;
-
-            [System.Serializable]
+            [Serializable]
             public struct Grid
             {
-                public float cellWidth;
-                public float cellHeight;
+                public int cellWidth;
+                public int cellHeight;
                 public int columns;
                 public int rows;
-                public float originY; // EM space ?
+                public float originY; // EM space
             }
         }
 
-        [System.Serializable]
+        [Serializable]
         public struct Metrics
         {
             // EM space
@@ -305,7 +346,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             public float descender;
         }
 
-        [System.Serializable]
+        [Serializable]
         public struct Glyph
         {
             public int unicode;
@@ -317,13 +358,15 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             public Bounds planeBounds;
             public Bounds atlasBounds; // Pixel space
 
-            [System.Serializable]
+            [Serializable]
             public struct Bounds
             {
                 public float left;
                 public float bottom;
                 public float right;
                 public float top;
+                public Vector2 Size() { return new Vector2(right - left, top - left); }
+                public Vector2 Center() { return 0.5f * new Vector2(left + right, bottom + top); }
             }
         }
     }

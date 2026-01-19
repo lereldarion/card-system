@@ -16,7 +16,7 @@ It **must** be placed alongside the `orbitron.png` font MSDF texture, so that th
 
 Charset
 ```
-[33, 126]
+[32, 126]
 "àâåéèêëïôùÿ"
 "“”–—×°"
 ```

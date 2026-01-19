@@ -25,6 +25,10 @@
     },
     "glyphs": [
         {
+            "unicode": 32,
+            "advance": 0.27200000000000002
+        },
+        {
             "unicode": 33,
             "advance": 0.22,
             "planeBounds": {
