@@ -1,19 +1,24 @@
+// Made by Lereldarion (https://github.com/lereldarion/)
+// Free to redistribute under the MIT license
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using System;
 
-// Usage : tag a set of properties that encode text.
+// Editor interface for text encoded to texture tables.
 //
+// Usage : tag a set of properties that encode text.
 // [LereldarionTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
 // _Text_LineCount("Text line count", Integer) = 0
 // _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
 // _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
 //
 // _Text_Encoding_Texture texture asset (path/to/font_texture.<ext>) must have a companion path/to/font_texture.metrics.json with glyph metadata.
-
-// Does not seem to work within a namespace. Use prefix instead for name collision avoidance.
+//
+// Position is an offset in input UV.
+// Size is set so that 1 input UV.y unit goes from font baseline to ascender height (https://en.wikipedia.org/wiki/Typeface#Font_metrics).
+// Shader-side, a signed distance function at input UV scale is returned, with negative = interior of characters.
 public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 {
     // Values from shader property arguments
@@ -352,7 +357,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             public int unicode;
             public float advance; // EM space
             // EM space.
-            // Top & bottom same for all grid glyphs. 
+            // Top & bottom same for all grid glyphs. top-bottom != lineHeight
             // |left| + advance/2 approximately conserved for all glyphs, at around 50% of |left| + right.
             // (-left, -bottom) is the origin point of the glyph in EM-space, advance the width.
             public Bounds planeBounds;

@@ -46,8 +46,8 @@ Shader "Lereldarion/ExplorerCard" {
         _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
         _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
 
-        _Font_Test_Character("Test character", Integer) = 0
-        _Font_Test_Size("Test size", Float) = 1
+        _Test_Line_Config("Test config", Vector) = (0, 0, 1, 1)
+        _Test_Line_Data0("Test data 0", Vector) = (0, 0, 1, 1)
     }
     SubShader {
         Tags {
@@ -64,6 +64,9 @@ Shader "Lereldarion/ExplorerCard" {
             Blend Off
 
             CGPROGRAM
+            #pragma warning (error : 3205) // implicit precision loss
+            #pragma warning (error : 3206) // implicit truncation
+
             #pragma target 5.0
             #pragma multi_compile_instancing
 
@@ -123,11 +126,12 @@ Shader "Lereldarion/ExplorerCard" {
             static const float _Logo_MSDF_Texture_Size = 128;
 
             uniform Texture2D<float4> _Text_Encoding_Texture;
-            uniform int _Text_LineCount;
+            uniform uint _Text_LineCount;
             uniform Texture2D<float3> _Font_MSDF_Atlas_Texture;
             uniform float4 _Font_MSDF_Atlas_Config; // (glyph_pixels.xy, atlas_columns, msdf_pixel_range)
-            uniform uint _Font_Test_Character;
-            uniform float _Font_Test_Size;
+
+            uniform float4 _Test_Line_Config;
+            uniform float4 _Test_Line_Data0;
 
             void vertex_stage(VertexData input, out FragmentInput output) {
                 UNITY_SETUP_INSTANCE_ID(input);
@@ -187,6 +191,63 @@ Shader "Lereldarion/ExplorerCard" {
                 return -texture_uv_sd; // MSDF tooling generates inverted SDF (positive inside)
             }
 
+            float sdf_lereldarion_text_lines(float2 uv, Texture2D<float3> font_atlas, float4 font_config, Texture2D<float4> encodings, uint line_count) {
+                uint2 encodings_pixels;
+                encodings.GetDimensions(encodings_pixels.x, encodings_pixels.y);
+                line_count = min(line_count, encodings_pixels.y);
+
+                line_count = 1; encodings_pixels.x = 4; // FIXME test
+
+                const float2 glyph_cell_pixels = font_config.xy;
+                const float2 glyph_usable_pixels = glyph_cell_pixels - 1; // Index from pixel center to pixel center, avoid edges.
+                const uint glyph_columns = (uint) font_config.z;
+                const float msdf_pixel_range = font_config.w;
+                
+                float2 atlas_pixels;
+                font_atlas.GetDimensions(atlas_pixels.x, atlas_pixels.y);
+                const float2 atlas_pixel_uv = 1. / atlas_pixels;
+                
+                float sd = +1./0.; // Infinity
+                for(uint i = 0; i < line_count; i += 1) {
+                    const float4 line_config = _Test_Line_Config;// encodings[uint2(0, i)]; // (offset.xy, scale, line_uvx_to_encodings)
+                    const float2 line_uv = (uv - line_config.xy) * line_config.z;
+                    const float line_encoding_x = line_uv.x * line_config.w;
+                    // Text rectangle bounding box test.
+                    if(all(0 <= line_uv && line_uv.y <= 1 && line_encoding_x <= float(encodings_pixels.x - 2))) {
+                        // Acess glyph reference. float -> uint rounds.
+                        const float4 glyph_pair_data = _Test_Line_Data0; // encodings[uint2(1 + uint(encodings_pixels.x), i)];
+
+                        // FIXME finish
+                        
+                        float2 glyph_uv = line_uv - float2(glyph_pair_data.z, 0); // FIXME offset
+                        uint atlas_id = glyph_pair_data.x;
+                        if(all(0 <= glyph_uv && glyph_uv <= glyph_usable_pixels * atlas_pixel_uv)) {
+                            const uint atlas_row = atlas_id / glyph_columns;
+                            const uint atlas_column = atlas_id - atlas_row * glyph_columns;
+                            const float2 atlas_offset = (float2(atlas_column * glyph_cell_pixels.x, atlas_pixels.y - glyph_cell_pixels.y * (atlas_row + 1)) + 0.5) * atlas_pixel_uv;
+                            const float tex_sd = median(font_atlas.SampleLevel(sampler_clamp_bilinear, glyph_uv + atlas_offset, 0)) - 0.5;
+                            // tex_sd is in [-0.5, 0.5]. It represents texture pixel ranges between [-msdf_pixel_range, msdf_pixel_range], using the inverse SDF direction.
+                            const float tex_sd_pixel = -tex_sd * 2 * msdf_pixel_range;
+                            sd = min(sd, tex_sd_pixel * atlas_pixel_uv.y / line_config.z);
+                        }
+
+                        // FIXME test Quick copy of the first
+                        glyph_uv = line_uv - float2(glyph_pair_data.w, 0); // FIXME offset
+                        atlas_id = glyph_pair_data.y;
+                        if(all(0 <= glyph_uv && glyph_uv <= glyph_usable_pixels * atlas_pixel_uv)) {
+                            const uint atlas_row = atlas_id / glyph_columns;
+                            const uint atlas_column = atlas_id - atlas_row * glyph_columns;
+                            const float2 atlas_offset = (float2(atlas_column * glyph_cell_pixels.x, atlas_pixels.y - glyph_cell_pixels.y * (atlas_row + 1)) + 0.5) * atlas_pixel_uv;
+                            const float tex_sd = median(font_atlas.SampleLevel(sampler_clamp_bilinear, glyph_uv + atlas_offset, 0)) - 0.5;
+                            // tex_sd is in [-0.5, 0.5]. It represents texture pixel ranges between [-msdf_pixel_range, msdf_pixel_range], using the inverse SDF direction.
+                            const float tex_sd_pixel = -tex_sd * 2 * msdf_pixel_range;
+                            sd = min(sd, tex_sd_pixel * atlas_pixel_uv.y / line_config.z);
+                        }
+                    }
+                }
+                return sd;
+            }
+
             fixed4 fragment_stage(FragmentInput input) : SV_Target {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
@@ -200,7 +261,7 @@ Shader "Lereldarion/ExplorerCard" {
                 const float2 raw_uv_range = float2(_Aspect_Ratio, 1);
                 const float2 quadrant_size = 0.5 * raw_uv_range;
                 const float2 centered_uv = input.uv0 - quadrant_size; // [-AR/2, AR/2] x [-0.5, 0.5]
-                const float screenspace_scale_of_uv = compute_screenspace_scale_of_uv(centered_uv);
+                const float screenspace_scale_of_uv = compute_screenspace_scale_of_uv(input.uv0);
                 
                 bool blurred = false;
                 float ui_sd;
@@ -259,27 +320,7 @@ Shader "Lereldarion/ExplorerCard" {
                     }
                 }
 
-                // Text test
-                {
-                    const float2 glyph_pixels = _Font_MSDF_Atlas_Config.xy;
-                    const uint glyph_columns = (uint) _Font_MSDF_Atlas_Config.z;
-                    const float msdf_pixel_range = _Font_MSDF_Atlas_Config.w;
-
-                    float2 atlas_pixels;
-                    _Font_MSDF_Atlas_Texture.GetDimensions(atlas_pixels.x, atlas_pixels.y);
-                    const float2 atlas_pixel_uv = 1. / atlas_pixels;
-                    const float2 glyph_uv_size = atlas_pixel_uv * glyph_pixels;
-                    
-                    uint glyph_row = _Font_Test_Character / glyph_columns;
-                    uint glyph_col = _Font_Test_Character - glyph_row * glyph_columns;
-    
-                    float2 cell_uv = centered_uv * _Font_Test_Size + /* centering */ 0.5 * glyph_uv_size;
-                    // Clamp to glyph rectangle, with half-pixel padding
-                    if(all(0.5 * atlas_pixel_uv < cell_uv && cell_uv < glyph_uv_size - 0.5 * atlas_pixel_uv)) {
-                        float2 cell_offset = float2(glyph_uv_size.x * glyph_col, 1. - glyph_uv_size.y * (glyph_row + 1));
-                        ui_sd = min(ui_sd, msdf_sample(_Font_MSDF_Atlas_Texture, cell_uv + cell_offset, msdf_pixel_range, atlas_pixels.x /*FIXME proper scaling*/) / _Font_Test_Size);
-                    }
-                }
+                ui_sd = min(ui_sd, sdf_lereldarion_text_lines(input.uv0, _Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_Encoding_Texture, _Text_LineCount));
 
                 // Texture sampling with parallax.
                 // Make tiling and offset values work on the center
