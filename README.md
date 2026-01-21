@@ -21,8 +21,10 @@ TODO
 - A custom `MaterialPropertyDrawer` enables ergonomic edition of the text line texture.
 
 # TODO
-- MaterialPropertyDrawer load glyph metadata
-- MaterialPropertyDrawer load/save to texture. maybe with instant feedback
-- instanced version ? requires tex2D array + fixed instanced id
-- Package release when operational
+- Shader : finish displaying text lines
+- MaterialPropertyDrawer : generate nice offset/scale based on font metrics
+- MaterialPropertyDrawer load from texture.
+- MaterialPropertyDrawer instant feedback ?
 - Back of the card
+- instanced version ? requires tex2D array + fixed instanced id. Ergonomy of the UI will be crap.
+- Package release when operational
