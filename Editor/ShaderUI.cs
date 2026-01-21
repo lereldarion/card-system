@@ -153,6 +153,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             GUIStyle style = all_lines_representable ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
             if (GUI.Button(new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Save", style) && all_lines_representable)
             {
+                font.Encode(line_cache);
                 // TODO save. Gen texture AND set properties
             }
             if (GUI.Button(new Rect(gui_line_text.x + 0.8f * gui_line_text.width, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Reset"))
@@ -260,7 +261,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         {
             public char character;
             public float advance_px;
-            public float left_px;
+            public float left_px; // negative
         }
 
         public Font(MetricsJSON metrics)
@@ -316,6 +317,63 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             }
         }
 
+        public void Encode(LineCache lines)
+        {
+            // Place characters one after another, computing center positions, tile left positions, and list of entries
+            LineWithLayout[] layouted_lines = lines.Lines.Select(line =>
+            {
+                float current_x = 0;
+                float min_inter_center_distance_px = float.PositiveInfinity;
+                var layouted_glyphs = new List<LineWithLayout.Glyph>();
+                foreach (char c in line.text.TrimEnd() /*ignore trailing whitespace*/)
+                {
+                    if (whitespace_advance_px.TryGetValue(c, out float advance)) { current_x += advance; }
+                    else
+                    {
+                        int atlas_id = char_to_atlas_id[c];
+                        var glyph = glyphs[atlas_id];
+                        var entry = new LineWithLayout.Glyph
+                        {
+                            atlas_id = atlas_id,
+                            center_px = current_x + 0.5f * glyph.advance_px,
+                            tile_left_px = current_x + glyph.left_px
+                        };
+                        if (layouted_glyphs.Count > 0)
+                        {
+                            min_inter_center_distance_px = Mathf.Min(min_inter_center_distance_px, entry.center_px - layouted_glyphs.Last().center_px);
+                        }
+                        current_x += glyph.advance_px;
+                        layouted_glyphs.Add(entry);
+                    }
+                }
+                return new LineWithLayout
+                {
+                    glyphs = layouted_glyphs,
+                    width_px = current_x,
+                    min_inter_center_distance_width_ratio = current_x > 0 ? min_inter_center_distance_px / current_x : float.PositiveInfinity
+                };
+            }).ToArray();
+
+            // We need to choose texture width, such that every line has enough resolution (relative to its width) to index all separate characters.
+            float min_inter_center_distance_width_ratio = layouted_lines.Min(line => line.min_inter_center_distance_width_ratio);
+            if(float.IsPositiveInfinity(min_inter_center_distance_width_ratio)) { throw new Exception("Empty text"); } // FIXME handle later by no texture + line count = 0
+            int encoding_resolution = Mathf.NextPowerOfTwo(Mathf.CeilToInt(1f / min_inter_center_distance_width_ratio) + 1 /*line config pixel*/);
+
+            Debug.Log(encoding_resolution);
+        }
+        private struct LineWithLayout
+        {
+            public List<Glyph> glyphs;
+            public float width_px;
+            public float min_inter_center_distance_width_ratio;
+            public struct Glyph
+            {
+                public int atlas_id;
+                // Offsets
+                public float center_px;
+                public float tile_left_px;
+            }
+        }
         public bool IsRepresentable(string text) { return text.All(c => char_to_atlas_id.ContainsKey(c) || whitespace_advance_px.ContainsKey(c)); }
     }
 
