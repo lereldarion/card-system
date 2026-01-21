@@ -5,8 +5,6 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using System;
-using BestHTTP.SecureProtocol.Org.BouncyCastle.Math.EC.Multiplier;
-using Mono.CompilerServices.SymbolWriter;
 
 // Editor interface for text encoded to texture tables.
 //
@@ -36,6 +34,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
     private Texture current_font_texture = null;
     private Font font = null;
     private Texture current_encoding_texture = null;
+    private string current_encoding_texture_asset_path = "";
     private LineCache line_cache;
 
     // GUI state
@@ -105,6 +104,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 cache_state = CachedState.Font;
                 current_encoding_texture = encoding_texture;
 
+                if (encoding_texture is not null) { current_encoding_texture_asset_path = AssetDatabase.GetAssetPath(encoding_texture); }
                 line_cache = new LineCache(encoding_texture, font);
                 cache_state = CachedState.Text;
                 gui_error = "";
@@ -112,11 +112,12 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         }
     }
 
-    public override void OnGUI(Rect rect, MaterialProperty prop, string label, MaterialEditor editor)
+    public override void OnGUI(Rect rect, MaterialProperty encoding_texture_prop, string label, MaterialEditor editor)
     {
-        float line_height = base.GetPropertyHeight(prop, label, editor);
+        Material material = (Material)editor.target;
+        float line_height = base.GetPropertyHeight(encoding_texture_prop, label, editor);
         float line_spacing = line_height + 1;
-        LoadState(prop, editor);
+        LoadState(encoding_texture_prop, editor);
 
         // Style
         Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_height);
@@ -154,9 +155,29 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             GUIStyle style = all_lines_representable ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
             if (GUI.Button(new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Save", style) && all_lines_representable)
             {
-                Texture2D encoding = font.Encode(line_cache);
-                // FIXME null = no glyph to encode ; set line count = 0
-                // TODO save. Gen texture AND set properties
+                var (encoding_texture, line_count) = font.Encode(line_cache);
+
+                // Manage asset database. Try to keep the asset_path cached even if temporarily deleted.
+                if (encoding_texture is null)
+                {
+                    if (AssetDatabase.Contains(current_encoding_texture)) { AssetDatabase.DeleteAsset(current_encoding_texture_asset_path); }
+                }
+                else
+                {
+                    if (current_encoding_texture_asset_path is null || current_encoding_texture_asset_path == "")
+                    {
+                        current_encoding_texture_asset_path = System.IO.Path.ChangeExtension(AssetDatabase.GetAssetPath(editor.target), $".{encoding_texture_prop.name}.asset");
+                    }
+                    AssetDatabase.CreateAsset(encoding_texture, current_encoding_texture_asset_path);
+                }
+
+                material.SetVector(font_config_property_name, new Vector4(font.grid_cell_pixels.x, font.grid_cell_pixels.y, font.grid_dimensions.x, font.msdf_pixel_range));
+                material.SetInteger(line_count_property_name, line_count);
+                material.SetTexture(encoding_texture_prop.name, encoding_texture);
+
+                // Cache status
+                current_encoding_texture = encoding_texture;
+                line_cache.Dirty = false;
             }
             if (GUI.Button(new Rect(gui_line_text.x + 0.8f * gui_line_text.width, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Reset"))
             {
@@ -197,41 +218,40 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
     private class LineCache
     {
+        private Font font;
         // Cached state of text system. Read from texture, store to texture.
         private List<Line> lines;
-        private bool dirty = false;
-        private Font font;
+        public bool Dirty = false;
 
         public List<Line> Lines { get { return lines; } }
-        public bool Dirty { get { return dirty; } }
 
         public LineCache(Texture encoding, Font font)
         {
             lines = new List<Line>();
-            dirty = false;
+            Dirty = false;
             this.font = font;
         }
 
         public void Add()
         {
             lines.Add(new Line());
-            dirty = true;
+            Dirty = true;
         }
         public void RemoveAt(int i)
         {
             lines.RemoveAt(i);
-            dirty = true;
+            Dirty = true;
         }
         public void SetLinePositionSize(int i, Vector3 position_size)
         {
-            dirty = dirty || lines[i].PositionSize != position_size;
+            Dirty = Dirty || lines[i].PositionSize != position_size;
             lines[i].PositionSize = position_size;
         }
         public void SetLineText(int i, string text)
         {
             if (lines[i].text != text)
             {
-                dirty = true;
+                Dirty = true;
                 lines[i].text = text;
                 lines[i].representable = font.IsRepresentable(text);
             }
@@ -253,6 +273,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         public readonly Vector2Int atlas_pixels;
         public readonly Vector2Int grid_dimensions;
         public readonly Vector2Int grid_cell_pixels;
+        public readonly float msdf_pixel_range;
         // Glyph data. Glyph atlas id indexing is left to right, row by row from top to bottom.
         public readonly Glyph[] glyphs;
         public readonly Dictionary<char, int> char_to_atlas_id;
@@ -272,6 +293,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             atlas_pixels = new Vector2Int(metrics.atlas.width, metrics.atlas.height);
             grid_dimensions = new Vector2Int(metrics.atlas.grid.columns, metrics.atlas.grid.rows);
             grid_cell_pixels = new Vector2Int(metrics.atlas.grid.cellWidth, metrics.atlas.grid.cellHeight);
+            msdf_pixel_range = metrics.atlas.distanceRange;
             if (atlas_pixels == Vector2Int.zero || grid_dimensions == Vector2Int.zero || grid_cell_pixels == Vector2Int.zero)
             {
                 throw new Exception("msdf-atlas-gen font must be in uniform grid mode");
@@ -320,7 +342,9 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         }
 
         public bool IsRepresentable(string text) { return text.All(c => char_to_atlas_id.ContainsKey(c) || whitespace_advance_px.ContainsKey(c)); }
-        public Texture2D Encode(LineCache lines)
+
+        // Encode lines in a texture. Returns (texture, line_count). line_count == 0 => texture = null.
+        public (Texture2D, int) Encode(LineCache lines)
         {
             // Place characters one after another, computing center positions, tile left positions, and list of entries.
             LineWithLayout[] layouted_lines = lines.Lines.Select(line =>
@@ -363,7 +387,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 return line.glyphs.Count == 0;
             }).ToArray();
 
-            if (layouted_lines.Length == 0) { return null; }
+            if (layouted_lines.Length == 0) { return (null, 0); }
 
             // We need to choose texture width, such that every line has enough resolution (relative to its width) to index all separate characters.
             float min_inter_center_distance_width_ratio = layouted_lines.Min(line => line.min_inter_center_distance_width_ratio);
@@ -384,26 +408,26 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 buffer[offset + 2] = Mathf.FloatToHalf(line.offset_scale.z);
                 buffer[offset + 3] = Mathf.FloatToHalf(line.width_px);
                 offset += 4;
-                
+
                 // Fill encoding line with pair of glyphs around the line position.
                 float line_px_x_per_encoding_px = line.width_px / (encodings.width - 2); // pixel 1 is line_x=0, pixel encodings.width-1 is line_x=width_x
                 int current_right_glyph = 0;
                 // Init first pixel. line_x  = 0. All glyphs are to the right so left==right==glyph[0]
-                buffer[offset + 0] = (ushort) line.glyphs[0].atlas_id;
+                buffer[offset + 0] = (ushort)line.glyphs[0].atlas_id;
                 buffer[offset + 1] = Mathf.FloatToHalf(line.glyphs[0].tile_left_px);
                 buffer[offset + 2] = buffer[offset + 0];
                 buffer[offset + 3] = buffer[offset + 1];
                 offset += 4;
-                for(int j = 1; j < encodings.width - 1; j += 1)
+                for (int j = 1; j < encodings.width - 1; j += 1)
                 {
                     float line_x_px = line_px_x_per_encoding_px * j;
-                    if(line.glyphs[current_right_glyph].center_px < line_x_px && current_right_glyph < line.glyphs.Count - 1)
+                    if (line.glyphs[current_right_glyph].center_px < line_x_px && current_right_glyph < line.glyphs.Count - 1)
                     {
                         // Advance one glyph. Copy previous right glyph.
                         current_right_glyph += 1;
                         buffer[offset + 0] = buffer[offset - 2];
                         buffer[offset + 1] = buffer[offset - 1];
-                        buffer[offset + 2] = (ushort) line.glyphs[current_right_glyph].atlas_id;
+                        buffer[offset + 2] = (ushort)line.glyphs[current_right_glyph].atlas_id;
                         buffer[offset + 3] = Mathf.FloatToHalf(line.glyphs[current_right_glyph].tile_left_px);
                     }
                     else
@@ -428,7 +452,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             }
             encodings.SetPixelData(buffer, 0);
             encodings.Apply();
-            return encodings;
+            return (encodings, layouted_lines.Length);
         }
         private struct LineWithLayout
         {
