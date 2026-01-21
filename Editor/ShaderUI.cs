@@ -5,6 +5,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using BestHTTP.SecureProtocol.Org.BouncyCastle.Math.EC.Multiplier;
 
 // Editor interface for text encoded to texture tables.
 //
@@ -246,70 +247,76 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
     private class Font
     {
         // Using MSDF atlas in uniform grid mode.
-        public readonly Vector2Int atlas_pixel_size;
-        public readonly Vector2Int grid_size;
-        public readonly Vector2Int grid_cell_size;
+        public readonly Vector2Int atlas_pixels;
+        public readonly Vector2Int grid_dimensions;
+        public readonly Vector2Int grid_cell_pixels;
         // Glyph data. Glyph atlas id indexing is left to right, row by row from top to bottom.
         public readonly Glyph[] glyphs;
         public readonly Dictionary<char, int> char_to_atlas_id;
-        // Space has no glyph in the atlas, but still has a metrics entry
-        public readonly float space_advance_em;
-
+        public readonly Dictionary<char, float> whitespace_advance_px;
+        public readonly float font_ascender_pixels;
+        public readonly float baseline_pixels;
         public struct Glyph
         {
             public char character;
-            public float advance_em;
+            public float advance_px;
+            public float left_px;
         }
 
         public Font(MetricsJSON metrics)
         {
-            atlas_pixel_size = new Vector2Int(metrics.atlas.width, metrics.atlas.height);
-            grid_size = new Vector2Int(metrics.atlas.grid.columns, metrics.atlas.grid.rows);
-            grid_cell_size = new Vector2Int(metrics.atlas.grid.cellWidth, metrics.atlas.grid.cellHeight);
-            if (atlas_pixel_size == Vector2Int.zero || grid_size == Vector2Int.zero || grid_cell_size == Vector2Int.zero)
+            // Basic grid dimensions
+            atlas_pixels = new Vector2Int(metrics.atlas.width, metrics.atlas.height);
+            grid_dimensions = new Vector2Int(metrics.atlas.grid.columns, metrics.atlas.grid.rows);
+            grid_cell_pixels = new Vector2Int(metrics.atlas.grid.cellWidth, metrics.atlas.grid.cellHeight);
+            if (atlas_pixels == Vector2Int.zero || grid_dimensions == Vector2Int.zero || grid_cell_pixels == Vector2Int.zero)
             {
                 throw new Exception("msdf-atlas-gen font must be in uniform grid mode");
             }
             if (metrics.atlas.yOrigin != "bottom") { throw new Exception("msdf-atlas-gen font must be with y-origin=bottom"); }
 
-            glyphs = new Glyph[grid_size.x * grid_size.y];
-            char_to_atlas_id = new Dictionary<char, int>();
+            // Use pixel size as interchange. Cleaner than texture UVs that can be non-uniform if texture is a rectangle.
+            // Scan glyphs to find the first with EM size data to use as model, as all glyphs share the same in uniform grid mode.
+            Vector2 glyph_em_size = metrics.glyphs.Select(glyph => glyph.planeBounds.Size()).First(size => size != Vector2.zero);
+            // A glyph is represented by (grid_cell_size-1) pixels, due to 0.5 pixel borders
+            float em_to_pixel = (grid_cell_pixels.y - 1) / glyph_em_size.y;
 
+            // Glyph pixel info
+            font_ascender_pixels = em_to_pixel * metrics.metrics.ascender;
+            baseline_pixels = em_to_pixel * metrics.atlas.grid.originY;
+
+            glyphs = new Glyph[grid_dimensions.x * grid_dimensions.y];
+            char_to_atlas_id = new Dictionary<char, int>();
+            whitespace_advance_px = new Dictionary<char, float>();
             foreach (var glyph in metrics.glyphs)
             {
                 char character = (char)glyph.unicode;
-
                 if (glyph.planeBounds.Size() == Vector2.zero)
                 {
-                    if (character == ' ')
-                    {
-                        space_advance_em = glyph.advance;
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"LereldarionTextLinesDrawer: font loading: ignoring character with no glyph: '{character}' (code {glyph.unicode})");
-                    }
+                    // Whitespace with no glyph
+                    whitespace_advance_px.Add(character, em_to_pixel * glyph.advance);
                 }
                 else
                 {
                     // Glyphs are seen in atlas id order, but recompute it anyway.
                     // This protects against holes (like space) and future packing change.
                     Vector2 atlas_glyph_center = glyph.atlasBounds.Center();
-                    atlas_glyph_center.y = atlas_pixel_size.y - atlas_glyph_center.y; // put origin on top
-                    Vector2Int cell_position = Vector2Int.FloorToInt(atlas_glyph_center / grid_cell_size);
-                    int atlas_id = cell_position.y * grid_size.x + cell_position.x;
+                    atlas_glyph_center.y = atlas_pixels.y - atlas_glyph_center.y; // put origin on top
+                    Vector2Int cell_position = Vector2Int.FloorToInt(atlas_glyph_center / grid_cell_pixels);
+                    int atlas_id = cell_position.y * grid_dimensions.x + cell_position.x;
 
-                    // TODO other useful metrics
-                    float center = -glyph.planeBounds.left + glyph.advance / 2;
-                    float ratio = center / (glyph.planeBounds.right - glyph.planeBounds.left);
-
-                    glyphs[atlas_id] = new Glyph { character = character, advance_em = glyph.advance };
+                    glyphs[atlas_id] = new Glyph
+                    {
+                        character = character,
+                        advance_px = em_to_pixel * glyph.advance,
+                        left_px = em_to_pixel * glyph.planeBounds.left
+                    };
                     char_to_atlas_id.Add(character, atlas_id);
                 }
             }
         }
 
-        public bool IsRepresentable(string text) { return text.All(c => char_to_atlas_id.ContainsKey(c) || c == ' '); }
+        public bool IsRepresentable(string text) { return text.All(c => char_to_atlas_id.ContainsKey(c) || whitespace_advance_px.ContainsKey(c)); }
     }
 
     // Matches structure of https://github.com/Chlumsky/msdf-atlas-gen metrics JSON output in grid mode.
