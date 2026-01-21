@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using BestHTTP.SecureProtocol.Org.BouncyCastle.Math.EC.Multiplier;
+using Mono.CompilerServices.SymbolWriter;
 
 // Editor interface for text encoded to texture tables.
 //
@@ -153,7 +154,8 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             GUIStyle style = all_lines_representable ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
             if (GUI.Button(new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Save", style) && all_lines_representable)
             {
-                font.Encode(line_cache);
+                Texture2D encoding = font.Encode(line_cache);
+                // FIXME null = no glyph to encode ; set line count = 0
                 // TODO save. Gen texture AND set properties
             }
             if (GUI.Button(new Rect(gui_line_text.x + 0.8f * gui_line_text.width, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Reset"))
@@ -317,9 +319,10 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             }
         }
 
-        public void Encode(LineCache lines)
+        public bool IsRepresentable(string text) { return text.All(c => char_to_atlas_id.ContainsKey(c) || whitespace_advance_px.ContainsKey(c)); }
+        public Texture2D Encode(LineCache lines)
         {
-            // Place characters one after another, computing center positions, tile left positions, and list of entries
+            // Place characters one after another, computing center positions, tile left positions, and list of entries.
             LineWithLayout[] layouted_lines = lines.Lines.Select(line =>
             {
                 float current_x = 0;
@@ -348,21 +351,88 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 }
                 return new LineWithLayout
                 {
+                    offset_scale = line.PositionSize,
                     glyphs = layouted_glyphs,
                     width_px = current_x,
-                    min_inter_center_distance_width_ratio = current_x > 0 ? min_inter_center_distance_px / current_x : float.PositiveInfinity
+                    // For degenerate cases (one glyph), 1 pixel is enough
+                    min_inter_center_distance_width_ratio = current_x > 0 && float.IsFinite(min_inter_center_distance_px) ? min_inter_center_distance_px / current_x : 1
                 };
+            }).SkipWhile(line =>
+            {
+                // Ignore lines devoid of glyphs.
+                return line.glyphs.Count == 0;
             }).ToArray();
+
+            if (layouted_lines.Length == 0) { return null; }
 
             // We need to choose texture width, such that every line has enough resolution (relative to its width) to index all separate characters.
             float min_inter_center_distance_width_ratio = layouted_lines.Min(line => line.min_inter_center_distance_width_ratio);
-            if(float.IsPositiveInfinity(min_inter_center_distance_width_ratio)) { throw new Exception("Empty text"); } // FIXME handle later by no texture + line count = 0
             int encoding_resolution = Mathf.NextPowerOfTwo(Mathf.CeilToInt(1f / min_inter_center_distance_width_ratio) + 1 /*line config pixel*/);
+            encoding_resolution = Math.Max(encoding_resolution, 4); // Ensure at least 3 pixels for encoding length, avoids edge cases
 
-            Debug.Log(encoding_resolution);
+            // RGBA u16 texture, one line per line.
+            // - First column is a control pixel for the line : RG=offset, B=scaling, A=width_px
+            Texture2D encodings = new Texture2D(encoding_resolution, Mathf.NextPowerOfTwo(layouted_lines.Length), TextureFormat.RGBA64, false /*mip*/, true /*linear*/);
+            ushort[] buffer = new ushort[4 * encodings.width * encodings.height]; // RGBA by RGBA pixels, row by row
+            for (int i = 0; i < layouted_lines.Length; i += 1)
+            {
+                int offset = 4 * encodings.width * i;
+                LineWithLayout line = layouted_lines[i];
+                // Control pixel. TODO fit offset/scale to better position
+                buffer[offset + 0] = Mathf.FloatToHalf(line.offset_scale.x);
+                buffer[offset + 1] = Mathf.FloatToHalf(line.offset_scale.y);
+                buffer[offset + 2] = Mathf.FloatToHalf(line.offset_scale.z);
+                buffer[offset + 3] = Mathf.FloatToHalf(line.width_px);
+                offset += 4;
+                
+                // Fill encoding line with pair of glyphs around the line position.
+                float line_px_x_per_encoding_px = line.width_px / (encodings.width - 2); // pixel 1 is line_x=0, pixel encodings.width-1 is line_x=width_x
+                int current_right_glyph = 0;
+                // Init first pixel. line_x  = 0. All glyphs are to the right so left==right==glyph[0]
+                buffer[offset + 0] = (ushort) line.glyphs[0].atlas_id;
+                buffer[offset + 1] = Mathf.FloatToHalf(line.glyphs[0].tile_left_px);
+                buffer[offset + 2] = buffer[offset + 0];
+                buffer[offset + 3] = buffer[offset + 1];
+                offset += 4;
+                for(int j = 1; j < encodings.width - 1; j += 1)
+                {
+                    float line_x_px = line_px_x_per_encoding_px * j;
+                    if(line.glyphs[current_right_glyph].center_px < line_x_px && current_right_glyph < line.glyphs.Count - 1)
+                    {
+                        // Advance one glyph. Copy previous right glyph.
+                        current_right_glyph += 1;
+                        buffer[offset + 0] = buffer[offset - 2];
+                        buffer[offset + 1] = buffer[offset - 1];
+                        buffer[offset + 2] = (ushort) line.glyphs[current_right_glyph].atlas_id;
+                        buffer[offset + 3] = Mathf.FloatToHalf(line.glyphs[current_right_glyph].tile_left_px);
+                    }
+                    else
+                    {
+                        // Copy previous pixel
+                        buffer[offset + 0] = buffer[offset - 4];
+                        buffer[offset + 1] = buffer[offset - 3];
+                        buffer[offset + 2] = buffer[offset - 2];
+                        buffer[offset + 3] = buffer[offset - 1];
+                    }
+                    offset += 4;
+                }
+            }
+            for (int i = layouted_lines.Length; i < encodings.height; i += 1)
+            {
+                // Fill padding line config pixels with dummy values in case line_count variable is broken
+                int offset = 4 * encodings.width * i;
+                buffer[offset + 0] = 0;
+                buffer[offset + 1] = 0;
+                buffer[offset + 2] = 0;
+                buffer[offset + 3] = 0;
+            }
+            encodings.SetPixelData(buffer, 0);
+            encodings.Apply();
+            return encodings;
         }
         private struct LineWithLayout
         {
+            public Vector3 offset_scale; // From LineCache
             public List<Glyph> glyphs;
             public float width_px;
             public float min_inter_center_distance_width_ratio;
@@ -374,7 +444,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 public float tile_left_px;
             }
         }
-        public bool IsRepresentable(string text) { return text.All(c => char_to_atlas_id.ContainsKey(c) || whitespace_advance_px.ContainsKey(c)); }
+
     }
 
     // Matches structure of https://github.com/Chlumsky/msdf-atlas-gen metrics JSON output in grid mode.
