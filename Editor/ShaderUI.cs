@@ -336,11 +336,17 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                     Vector2Int cell_position = Vector2Int.FloorToInt(atlas_glyph_center / grid_cell_pixels);
                     int atlas_id = cell_position.y * grid_dimensions.x + cell_position.x;
 
+                    // The V2 encoding requires a centered advance. MSDF in grid mode is almost centered but not exactly.
+                    // Fix the advance to avoid clipping.
+                    // FIXME a better fix would be to allow advances to overlap (layout advance & draw advances), but costlier and with more edge cases (cross pixel characters)
+                    float glyph_em_center = glyph.planeBounds.Center().x;
+                    float centered_advance = 2 * Math.Max(glyph_em_center, glyph.advance - glyph_em_center);
+
                     glyphs[atlas_id] = new Glyph
                     {
                         character = character,
-                        advance_px = em_to_pixel.x * glyph.advance,
-                        advance_unorm = (uint)Mathf.RoundToInt(convert_to_advance_unorm * glyph.advance),
+                        advance_px = em_to_pixel.x * centered_advance,
+                        advance_unorm = (uint)Mathf.RoundToInt(convert_to_advance_unorm * centered_advance),
                     };
                     char_to_atlas_id.Add(character, (uint)atlas_id);
                 }
