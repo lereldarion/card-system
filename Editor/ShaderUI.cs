@@ -2,6 +2,7 @@
 // Free to redistribute under the MIT license
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using System.Collections.Generic;
 using System.Linq;
 using System;
@@ -396,28 +397,29 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
             // RGBA u16 texture, one line per line.
             // - First column is a control pixel for the line : RG=offset, B=scaling, A=width_px
-            Texture2D encodings = new Texture2D(encoding_resolution, Mathf.NextPowerOfTwo(layouted_lines.Length), TextureFormat.RGBA64, false /*mip*/, true /*linear*/);
-            ushort[] buffer = new ushort[4 * encodings.width * encodings.height]; // RGBA by RGBA pixels, row by row
+            Texture2D encodings = new Texture2D(encoding_resolution, Mathf.NextPowerOfTwo(layouted_lines.Length), GraphicsFormat.R16G16B16A16_SFloat, TextureCreationFlags.None);
+            var buffer = encodings.GetRawTextureData<RGBA_U16>();
             for (int i = 0; i < layouted_lines.Length; i += 1)
             {
-                int offset = 4 * encodings.width * i;
+                int offset = encodings.width * i;
                 LineWithLayout line = layouted_lines[i];
                 // Control pixel. TODO fit offset/scale to better position
-                buffer[offset + 0] = Mathf.FloatToHalf(line.offset_scale.x);
-                buffer[offset + 1] = Mathf.FloatToHalf(line.offset_scale.y);
-                buffer[offset + 2] = Mathf.FloatToHalf(line.offset_scale.z);
-                buffer[offset + 3] = Mathf.FloatToHalf(line.width_px);
-                offset += 4;
+                buffer[offset++] = new RGBA_U16
+                {
+                    r = Mathf.FloatToHalf(line.offset_scale.x),
+                    g = Mathf.FloatToHalf(line.offset_scale.y),
+                    b = Mathf.FloatToHalf(line.offset_scale.z),
+                    a = Mathf.FloatToHalf(line.width_px)
+                };
 
                 // Fill encoding line with pair of glyphs around the line position.
                 float line_px_x_per_encoding_px = line.width_px / (encodings.width - 2); // pixel 1 is line_x=0, pixel encodings.width-1 is line_x=width_x
                 int current_right_glyph = 0;
                 // Init first pixel. line_x  = 0. All glyphs are to the right so left==right==glyph[0]
-                buffer[offset + 0] = (ushort)line.glyphs[0].atlas_id;
-                buffer[offset + 1] = Mathf.FloatToHalf(line.glyphs[0].tile_left_px);
-                buffer[offset + 2] = buffer[offset + 0];
-                buffer[offset + 3] = buffer[offset + 1];
-                offset += 4;
+                ushort glyph0_r = Mathf.FloatToHalf(line.glyphs[0].atlas_id);
+                ushort glyph0_g = Mathf.FloatToHalf(line.glyphs[0].tile_left_px);
+                buffer[offset++] = new RGBA_U16 { r = glyph0_r, g = glyph0_g, b = glyph0_r, a = glyph0_g };
+                // Then other pixels by shifting the first one.
                 for (int j = 1; j < encodings.width - 1; j += 1)
                 {
                     float line_x_px = line_px_x_per_encoding_px * j;
@@ -425,32 +427,26 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                     {
                         // Advance one glyph. Copy previous right glyph.
                         current_right_glyph += 1;
-                        buffer[offset + 0] = buffer[offset - 2];
-                        buffer[offset + 1] = buffer[offset - 1];
-                        buffer[offset + 2] = (ushort)line.glyphs[current_right_glyph].atlas_id;
-                        buffer[offset + 3] = Mathf.FloatToHalf(line.glyphs[current_right_glyph].tile_left_px);
+                        buffer[offset] = new RGBA_U16
+                        {
+                            r = buffer[offset - 1].b,
+                            g = buffer[offset - 1].a,
+                            b = Mathf.FloatToHalf(line.glyphs[current_right_glyph].atlas_id),
+                            a = Mathf.FloatToHalf(line.glyphs[current_right_glyph].tile_left_px)
+                        };
                     }
                     else
                     {
-                        // Copy previous pixel
-                        buffer[offset + 0] = buffer[offset - 4];
-                        buffer[offset + 1] = buffer[offset - 3];
-                        buffer[offset + 2] = buffer[offset - 2];
-                        buffer[offset + 3] = buffer[offset - 1];
+                        buffer[offset] = buffer[offset - 1];
                     }
-                    offset += 4;
+                    offset += 1;
                 }
             }
             for (int i = layouted_lines.Length; i < encodings.height; i += 1)
             {
                 // Fill padding line config pixels with dummy values in case line_count variable is broken
-                int offset = 4 * encodings.width * i;
-                buffer[offset + 0] = 0;
-                buffer[offset + 1] = 0;
-                buffer[offset + 2] = 0;
-                buffer[offset + 3] = 0;
+                buffer[encodings.width * i] = new RGBA_U16 { r = 0, g = 0, b = 0, a = 0 };
             }
-            encodings.SetPixelData(buffer, 0);
             encodings.Apply();
             return (encodings, layouted_lines.Length);
         }
@@ -468,7 +464,13 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 public float tile_left_px;
             }
         }
-
+        private struct RGBA_U16
+        {
+            public ushort r;
+            public ushort g;
+            public ushort b;
+            public ushort a;
+        }
     }
 
     // Matches structure of https://github.com/Chlumsky/msdf-atlas-gen metrics JSON output in grid mode.

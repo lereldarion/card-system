@@ -21,7 +21,8 @@ TODO
 - A custom `MaterialPropertyDrawer` enables ergonomic edition of the text line texture.
 
 # TODO
-- Shader : finish displaying text lines
+- Shader : debug text line display.
+- UI : fix reloading when save, annoying
 - MaterialPropertyDrawer : generate nice offset/scale based on font metrics
 - MaterialPropertyDrawer load from texture.
 - MaterialPropertyDrawer instant feedback ?

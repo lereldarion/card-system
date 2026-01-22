@@ -45,9 +45,6 @@ Shader "Lereldarion/ExplorerCard" {
         _Text_LineCount("Text line count", Integer) = 0
         _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
         _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
-
-        _Test_Line_Config("Test config", Vector) = (0, 0, 1, 1)
-        _Test_Line_Data0("Test data 0", Vector) = (0, 0, 1, 1)
     }
     SubShader {
         Tags {
@@ -130,9 +127,6 @@ Shader "Lereldarion/ExplorerCard" {
             uniform Texture2D<float3> _Font_MSDF_Atlas_Texture;
             uniform float4 _Font_MSDF_Atlas_Config; // (glyph_pixels.xy, atlas_columns, msdf_pixel_range)
 
-            uniform float4 _Test_Line_Config;
-            uniform float4 _Test_Line_Data0;
-
             void vertex_stage(VertexData input, out FragmentInput output) {
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
@@ -194,9 +188,8 @@ Shader "Lereldarion/ExplorerCard" {
             float sdf_lereldarion_text_lines(float2 uv, Texture2D<float3> font_atlas, float4 font_config, Texture2D<float4> encodings, uint line_count) {
                 uint2 encodings_pixels;
                 encodings.GetDimensions(encodings_pixels.x, encodings_pixels.y);
-                line_count = min(line_count, encodings_pixels.y);
-
-                line_count = 1; encodings_pixels.x = 4; // FIXME test
+                const float glyph_table_len = encodings_pixels.x - 2;
+                line_count = min(line_count, encodings_pixels.y); // Clamp line_count in case it is broken
 
                 const float2 glyph_cell_pixels = font_config.xy;
                 const float2 glyph_usable_pixels = glyph_cell_pixels - 1; // Index from pixel center to pixel center, avoid edges.
@@ -205,43 +198,43 @@ Shader "Lereldarion/ExplorerCard" {
                 
                 float2 atlas_pixels;
                 font_atlas.GetDimensions(atlas_pixels.x, atlas_pixels.y);
-                const float2 atlas_pixel_uv = 1. / atlas_pixels;
+                const float2 atlas_pixel_to_uv = 1. / atlas_pixels;
                 
-                float sd = +1./0.; // Infinity
+                float sd = 100000; // Infinity
                 for(uint i = 0; i < line_count; i += 1) {
-                    const float4 line_config = _Test_Line_Config;// encodings[uint2(0, i)]; // (offset.xy, scale, line_uvx_to_encodings)
-                    const float2 line_uv = (uv - line_config.xy) * line_config.z;
-                    const float line_encoding_x = line_uv.x * line_config.w;
+                    const float4 line_config = encodings[uint2(0, i)]; // (offset.xy, scale, line_width in atlas pixels)
+                    const float2 line_px = (uv - line_config.xy) * line_config.z; // Convert to glyph pixel scale and offset
+                    const float line_width_px = line_config.w;
+                    if(line_width_px == 0) { break; } // Fallback stop
                     // Text rectangle bounding box test.
-                    if(all(0 <= line_uv && line_uv.y <= 1 && line_encoding_x <= float(encodings_pixels.x - 2))) {
-                        // Acess glyph reference. float -> uint rounds.
-                        const float4 glyph_pair_data = _Test_Line_Data0; // encodings[uint2(1 + uint(encodings_pixels.x), i)];
-
-                        // FIXME finish
+                    if(all(0 <= line_px && line_px <= float2(line_width_px, glyph_usable_pixels.y))) {
+                        // Acess glyph pair depending on x position. float -> uint rounds.
+                        const float line_x_ratio = line_px.x / line_width_px; // [0, 1]
+                        const float4 glyph_pair = encodings[uint2(1 + uint(line_x_ratio * glyph_table_len), i)]; // Index pixels [1, encoding_px.x - 1]
                         
-                        float2 glyph_uv = line_uv - float2(glyph_pair_data.z, 0); // FIXME offset
-                        uint atlas_id = glyph_pair_data.x;
-                        if(all(0 <= glyph_uv && glyph_uv <= glyph_usable_pixels * atlas_pixel_uv)) {
+                        // Left glyph
+                        uint atlas_id = glyph_pair.x;
+                        float2 glyph_px = line_px - float2(glyph_pair.y, 0);
+                        if(0 <= glyph_px.x && glyph_px.x <= glyph_usable_pixels.x) {
                             const uint atlas_row = atlas_id / glyph_columns;
                             const uint atlas_column = atlas_id - atlas_row * glyph_columns;
-                            const float2 atlas_offset = (float2(atlas_column * glyph_cell_pixels.x, atlas_pixels.y - glyph_cell_pixels.y * (atlas_row + 1)) + 0.5) * atlas_pixel_uv;
-                            const float tex_sd = median(font_atlas.SampleLevel(sampler_clamp_bilinear, glyph_uv + atlas_offset, 0)) - 0.5;
+                            const float2 atlas_offset_px = float2(atlas_column * glyph_cell_pixels.x, atlas_pixels.y - glyph_cell_pixels.y * (atlas_row + 1)) + 0.5;
+                            const float tex_sd = median(font_atlas.SampleLevel(sampler_clamp_bilinear, (glyph_px + atlas_offset_px) * atlas_pixel_to_uv, 0)) - 0.5;
                             // tex_sd is in [-0.5, 0.5]. It represents texture pixel ranges between [-msdf_pixel_range, msdf_pixel_range], using the inverse SDF direction.
                             const float tex_sd_pixel = -tex_sd * 2 * msdf_pixel_range;
-                            sd = min(sd, tex_sd_pixel * atlas_pixel_uv.y / line_config.z);
+                            sd = min(sd, tex_sd_pixel / line_config.z);
                         }
-
-                        // FIXME test Quick copy of the first
-                        glyph_uv = line_uv - float2(glyph_pair_data.w, 0); // FIXME offset
-                        atlas_id = glyph_pair_data.y;
-                        if(all(0 <= glyph_uv && glyph_uv <= glyph_usable_pixels * atlas_pixel_uv)) {
+                        // Right glyph
+                        atlas_id = glyph_pair.z;
+                        glyph_px = line_px - float2(glyph_pair.w, 0);
+                        if(0 <= glyph_px.x && glyph_px.x <= glyph_usable_pixels.x) {
                             const uint atlas_row = atlas_id / glyph_columns;
                             const uint atlas_column = atlas_id - atlas_row * glyph_columns;
-                            const float2 atlas_offset = (float2(atlas_column * glyph_cell_pixels.x, atlas_pixels.y - glyph_cell_pixels.y * (atlas_row + 1)) + 0.5) * atlas_pixel_uv;
-                            const float tex_sd = median(font_atlas.SampleLevel(sampler_clamp_bilinear, glyph_uv + atlas_offset, 0)) - 0.5;
+                            const float2 atlas_offset_px = float2(atlas_column * glyph_cell_pixels.x, atlas_pixels.y - glyph_cell_pixels.y * (atlas_row + 1)) + 0.5;
+                            const float tex_sd = median(font_atlas.SampleLevel(sampler_clamp_bilinear, (glyph_px + atlas_offset_px) * atlas_pixel_to_uv, 0)) - 0.5;
                             // tex_sd is in [-0.5, 0.5]. It represents texture pixel ranges between [-msdf_pixel_range, msdf_pixel_range], using the inverse SDF direction.
                             const float tex_sd_pixel = -tex_sd * 2 * msdf_pixel_range;
-                            sd = min(sd, tex_sd_pixel * atlas_pixel_uv.y / line_config.z);
+                            sd = min(sd, tex_sd_pixel / line_config.z);
                         }
                     }
                 }
