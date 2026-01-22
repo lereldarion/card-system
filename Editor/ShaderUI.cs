@@ -31,7 +31,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
     // Keep track of what was already validated or error.
     private CachedState cache_state = CachedState.None;
     private enum CachedState { None, SelectionAndShaderProperties, Font, Text }
-    private UnityEngine.Object[] current_material_selection = null; // multi-editing not supported but track the selection for proper detection
+    private Material current_material_selection = null;
     private Texture current_font_texture = null;
     private Font font = null;
     private Texture current_encoding_texture = null;
@@ -50,20 +50,24 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         this.line_count_property_name = line_count_property_name;
     }
 
-    private void LoadState(MaterialProperty text_prop, MaterialEditor editor)
+    private void LoadState(MaterialProperty encoding_texture_prop, MaterialEditor editor)
     {
-        Material material = (Material)editor.target;
-
-        if (editor.targets != current_material_selection)
+        if (editor.targets.Length > 1)
         {
             cache_state = CachedState.None;
-            current_material_selection = editor.targets;
+            gui_error = "Multi-editing is not supported";
+            return;
+        }
 
-            if (editor.targets.Length > 1) { gui_error = "Multi-editing is not supported"; return; }
+        Material material = (Material)editor.target;
+        if (material != current_material_selection || cache_state == CachedState.None)
+        {
+            cache_state = CachedState.None;
+            current_material_selection = material;
 
             // Shader sanity check, once per material change.
             // Shader modification forces reloading the drawer class for a recheck, no need to check for shader change.
-            if (text_prop.type != MaterialProperty.PropType.Texture) { gui_error = "[LereldarionTextLines(...)] must be applied to a Texture2D shader property"; return; }
+            if (encoding_texture_prop.type != MaterialProperty.PropType.Texture) { gui_error = "[LereldarionTextLines(...)] must be applied to a Texture2D shader property"; return; }
             if (!material.HasTexture(font_texture_property_name)) { gui_error = "LereldarionTextLines(font_texture_property_name, _, _) must point to a Texture shader property"; return; }
             if (!material.HasVector(font_config_property_name)) { gui_error = "LereldarionTextLines(_, font_config_property_name, _) must point to an Vector shader property"; return; }
             if (!material.HasInteger(line_count_property_name)) { gui_error = "LereldarionTextLines(_, _, line_count_property_name) must point to an Integer shader property"; return; }
@@ -99,7 +103,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
         if (cache_state >= CachedState.Font)
         {
-            Texture encoding_texture = text_prop.textureValue;
+            Texture encoding_texture = encoding_texture_prop.textureValue;
             if (current_encoding_texture != encoding_texture || cache_state == CachedState.Font)
             {
                 cache_state = CachedState.Font;
@@ -382,10 +386,10 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                     // For degenerate cases (one glyph), 1 pixel is enough
                     min_inter_center_distance_width_ratio = current_x > 0 && float.IsFinite(min_inter_center_distance_px) ? min_inter_center_distance_px / current_x : 1
                 };
-            }).SkipWhile(line =>
+            }).TakeWhile(line =>
             {
                 // Ignore lines devoid of glyphs.
-                return line.glyphs.Count == 0;
+                return line.glyphs.Count > 0;
             }).ToArray();
 
             if (layouted_lines.Length == 0) { return (null, 0); }
