@@ -305,11 +305,11 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             // Scan glyphs to find the first with EM size data to use as model, as all glyphs share the same in uniform grid mode.
             Vector2 glyph_em_size = metrics.glyphs.Select(glyph => glyph.planeBounds.Size()).First(size => size != Vector2.zero);
             // A glyph is represented by (grid_cell_size-1) pixels, due to 0.5 pixel borders
-            float em_to_pixel = (grid_cell_pixels.y - 1) / glyph_em_size.y;
+            Vector2 em_to_pixel = ((Vector2)grid_cell_pixels - Vector2.one) / glyph_em_size;
 
             // Glyph pixel info
-            font_ascender_pixels = em_to_pixel * metrics.metrics.ascender;
-            baseline_pixels = em_to_pixel * metrics.atlas.grid.originY;
+            font_ascender_pixels = em_to_pixel.y * metrics.metrics.ascender;
+            baseline_pixels = em_to_pixel.y * metrics.atlas.grid.originY;
 
             glyphs = new Glyph[grid_dimensions.x * grid_dimensions.y];
             char_to_atlas_id = new Dictionary<char, int>();
@@ -320,7 +320,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                 if (glyph.planeBounds.Size() == Vector2.zero)
                 {
                     // Whitespace with no glyph
-                    whitespace_advance_px.Add(character, em_to_pixel * glyph.advance);
+                    whitespace_advance_px.Add(character, em_to_pixel.x * glyph.advance);
                 }
                 else
                 {
@@ -334,8 +334,8 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                     glyphs[atlas_id] = new Glyph
                     {
                         character = character,
-                        advance_px = em_to_pixel * glyph.advance,
-                        left_px = em_to_pixel * glyph.planeBounds.left
+                        advance_px = em_to_pixel.x * glyph.advance,
+                        left_px = em_to_pixel.x * glyph.planeBounds.left
                     };
                     char_to_atlas_id.Add(character, atlas_id);
                 }
@@ -392,7 +392,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
             // We need to choose texture width, such that every line has enough resolution (relative to its width) to index all separate characters.
             float min_inter_center_distance_width_ratio = layouted_lines.Min(line => line.min_inter_center_distance_width_ratio);
-            int encoding_resolution = Mathf.NextPowerOfTwo(Mathf.CeilToInt(1f / min_inter_center_distance_width_ratio) + 1 /*line config pixel*/);
+            int encoding_resolution = Mathf.NextPowerOfTwo(Mathf.CeilToInt(1.1f /*margin over 1*/ / min_inter_center_distance_width_ratio) + 1 /*line config pixel*/);
             encoding_resolution = Math.Max(encoding_resolution, 4); // Ensure at least 3 pixels for encoding length, avoids edge cases
 
             // RGBA u16 texture, one line per line.
