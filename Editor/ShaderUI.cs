@@ -277,10 +277,11 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         public readonly Vector2Int atlas_pixels;
         public readonly Vector2Int grid_dimensions;
         public readonly Vector2Int grid_cell_pixels;
+        public readonly Vector2Int grid_cell_usable_pixels; // 0.5 pixel edges are unusable on glyphs to avoid bilinear blend with neighbor glyphs
         public readonly float msdf_pixel_range;
         // Glyph data. Glyph atlas id indexing is left to right, row by row from top to bottom.
         public readonly Glyph[] glyphs;
-        public readonly Dictionary<char, int> char_to_atlas_id;
+        public readonly Dictionary<char, uint> char_to_atlas_id;
         public readonly Dictionary<char, float> whitespace_advance_px;
         public readonly float font_ascender_pixels;
         public readonly float baseline_pixels;
@@ -288,7 +289,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         {
             public char character;
             public float advance_px;
-            public float left_px; // negative
+            public uint advance_unorm; // unorm encoded ratio of grid_cell_usable_pixels.x
         }
 
         public Font(MetricsJSON metrics)
@@ -297,6 +298,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             atlas_pixels = new Vector2Int(metrics.atlas.width, metrics.atlas.height);
             grid_dimensions = new Vector2Int(metrics.atlas.grid.columns, metrics.atlas.grid.rows);
             grid_cell_pixels = new Vector2Int(metrics.atlas.grid.cellWidth, metrics.atlas.grid.cellHeight);
+            grid_cell_usable_pixels = grid_cell_pixels - Vector2Int.one;
             msdf_pixel_range = metrics.atlas.distanceRange;
             if (atlas_pixels == Vector2Int.zero || grid_dimensions == Vector2Int.zero || grid_cell_pixels == Vector2Int.zero)
             {
@@ -307,15 +309,15 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             // Use pixel size as interchange. Cleaner than texture UVs that can be non-uniform if texture is a rectangle.
             // Scan glyphs to find the first with EM size data to use as model, as all glyphs share the same in uniform grid mode.
             Vector2 glyph_em_size = metrics.glyphs.Select(glyph => glyph.planeBounds.Size()).First(size => size != Vector2.zero);
-            // A glyph is represented by (grid_cell_size-1) pixels, due to 0.5 pixel borders
-            Vector2 em_to_pixel = ((Vector2)grid_cell_pixels - Vector2.one) / glyph_em_size;
+            Vector2 em_to_pixel = ((Vector2)grid_cell_usable_pixels) / glyph_em_size;
+            float convert_to_advance_unorm = ((1u << bits_advance) - 1u) / glyph_em_size.x;
 
             // Glyph pixel info
             font_ascender_pixels = em_to_pixel.y * metrics.metrics.ascender;
             baseline_pixels = em_to_pixel.y * metrics.atlas.grid.originY;
 
             glyphs = new Glyph[grid_dimensions.x * grid_dimensions.y];
-            char_to_atlas_id = new Dictionary<char, int>();
+            char_to_atlas_id = new Dictionary<char, uint>();
             whitespace_advance_px = new Dictionary<char, float>();
             foreach (var glyph in metrics.glyphs)
             {
@@ -338,9 +340,9 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                     {
                         character = character,
                         advance_px = em_to_pixel.x * glyph.advance,
-                        left_px = em_to_pixel.x * glyph.planeBounds.left
+                        advance_unorm = (uint)Mathf.RoundToInt(convert_to_advance_unorm * glyph.advance),
                     };
-                    char_to_atlas_id.Add(character, atlas_id);
+                    char_to_atlas_id.Add(character, (uint)atlas_id);
                 }
             }
         }
@@ -348,31 +350,34 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         public bool IsRepresentable(string text) { return text.All(c => char_to_atlas_id.ContainsKey(c) || whitespace_advance_px.ContainsKey(c)); }
 
         // Encode lines in a texture. Returns (texture, line_count). line_count == 0 => texture = null.
+        // RGBA u32 texture, line per line.
+        // First column is a control pixel for each line :
+        // - RG[0..16] = f16 offset, R[16..32] = f16 scaling
+        // - B[0..16] = f16 width_px, B[16..32] = u16 glyph count
+        // Next pixels in the line : glyphs pixels, 4 by 4. (R->G->B->A)->(R->G->B->A) etc. Last one may have the last glyph repeated to pad.
+        // Each pixel bit-encodes (atlas_id, advance, center_x), the last 2 as Unorm ratios of respectively glyph_width and line_width.
+        private const int bits_atlas_id = 12;
+        private const int bits_advance = 8; // Unorm ratio of glyph_width, resolution of 1/256
+        private const int bits_center = 32 - (bits_advance + bits_atlas_id); // Unorm ratio of line_width, resolution of 1/2^12
         public (Texture2D, int) Encode(LineCache lines)
         {
-            // Place characters one after another, computing center positions, tile left positions, and list of entries.
+            // Place characters one after another, computing center positions
             LineWithLayout[] layouted_lines = lines.Lines.Select(line =>
             {
                 float current_x = 0;
-                float min_inter_center_distance_px = float.PositiveInfinity;
                 var layouted_glyphs = new List<LineWithLayout.Glyph>();
                 foreach (char c in line.text.TrimEnd() /*ignore trailing whitespace*/)
                 {
                     if (whitespace_advance_px.TryGetValue(c, out float advance)) { current_x += advance; }
                     else
                     {
-                        int atlas_id = char_to_atlas_id[c];
+                        uint atlas_id = char_to_atlas_id[c];
                         var glyph = glyphs[atlas_id];
                         var entry = new LineWithLayout.Glyph
                         {
                             atlas_id = atlas_id,
                             center_px = current_x + 0.5f * glyph.advance_px,
-                            tile_left_px = current_x + glyph.left_px
                         };
-                        if (layouted_glyphs.Count > 0)
-                        {
-                            min_inter_center_distance_px = Mathf.Min(min_inter_center_distance_px, entry.center_px - layouted_glyphs.Last().center_px);
-                        }
                         current_x += glyph.advance_px;
                         layouted_glyphs.Add(entry);
                     }
@@ -382,8 +387,6 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
                     offset_scale = line.PositionSize,
                     glyphs = layouted_glyphs,
                     width_px = current_x,
-                    // For degenerate cases (one glyph), 1 pixel is enough
-                    min_inter_center_distance_width_ratio = current_x > 0 && float.IsFinite(min_inter_center_distance_px) ? min_inter_center_distance_px / current_x : 1
                 };
             }).TakeWhile(line =>
             {
@@ -393,62 +396,51 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
             if (layouted_lines.Length == 0) { return (null, 0); }
 
-            // We need to choose texture width, such that every line has enough resolution (relative to its width) to index all separate characters.
-            float min_inter_center_distance_width_ratio = layouted_lines.Min(line => line.min_inter_center_distance_width_ratio);
-            int encoding_resolution = Mathf.NextPowerOfTwo(Mathf.CeilToInt(1.1f /*margin over 1*/ / min_inter_center_distance_width_ratio) + 1 /*line config pixel*/);
-            encoding_resolution = Math.Max(encoding_resolution, 4); // Ensure at least 3 pixels for encoding length, avoids edge cases
+            // Min resolution needed. We store 1 pixel for control, and 4 characters per foloowing pixel on a line.
+            int max_glyph_count = layouted_lines.Max(line => line.glyphs.Count);
+            int div_ceil(int n, int div) { return (n + div - 1) / div; }
+            int encoding_resolution = Mathf.NextPowerOfTwo(div_ceil(max_glyph_count, 4) + 1 /*line config pixel*/);
 
-            // RGBA u16 texture, one line per line.
-            // - First column is a control pixel for the line : RG=offset, B=scaling, A=width_px
-            Texture2D encodings = new Texture2D(encoding_resolution, Mathf.NextPowerOfTwo(layouted_lines.Length), GraphicsFormat.R16G16B16A16_SFloat, TextureCreationFlags.None);
-            var buffer = encodings.GetRawTextureData<RGBA_U16>();
+            // Texture encoding. R32G32B32A32_UInt so use f32x4 and bitcast using load only. Stupid...
+            Texture2D encodings = new Texture2D(encoding_resolution, Mathf.NextPowerOfTwo(layouted_lines.Length), GraphicsFormat.R32G32B32A32_SFloat, 1, TextureCreationFlags.None);
+            var buffer = encodings.GetRawTextureData<uint>();
             for (int i = 0; i < layouted_lines.Length; i += 1)
             {
-                int offset = encodings.width * i;
+                int offset = 4 * encodings.width * i;
                 LineWithLayout line = layouted_lines[i];
-                // Control pixel. TODO fit offset/scale to better position
-                buffer[offset++] = new RGBA_U16
-                {
-                    r = Mathf.FloatToHalf(line.offset_scale.x),
-                    g = Mathf.FloatToHalf(line.offset_scale.y),
-                    b = Mathf.FloatToHalf(line.offset_scale.z),
-                    a = Mathf.FloatToHalf(line.width_px)
-                };
+                // Control pixel.
+                // TODO fit offset/scale to better position
+                // TODO rotation
+                // TODO spare space. Could be used for effects like bold or color storage (RGB8 unorm) ?
+                buffer[offset + 0] = ((uint)Mathf.FloatToHalf(line.offset_scale.x)) | (((uint)Mathf.FloatToHalf(line.width_px)) << 16);
+                buffer[offset + 1] = ((uint)Mathf.FloatToHalf(line.offset_scale.y)) | (((uint)line.glyphs.Count) << 16);
+                buffer[offset + 2] = (uint)Mathf.FloatToHalf(line.offset_scale.z);
+                buffer[offset + 3] = 0;
+                offset += 4;
 
-                // Fill encoding line with pair of glyphs around the line position.
-                float line_px_x_per_encoding_px = line.width_px / (encodings.width - 2); // pixel 1 is line_x=0, pixel encodings.width-1 is line_x=width_x
-                int current_right_glyph = 0;
-                // Init first pixel. line_x  = 0. All glyphs are to the right so left==right==glyph[0]
-                ushort glyph0_r = Mathf.FloatToHalf(line.glyphs[0].atlas_id);
-                ushort glyph0_g = Mathf.FloatToHalf(line.glyphs[0].tile_left_px);
-                buffer[offset++] = new RGBA_U16 { r = glyph0_r, g = glyph0_g, b = glyph0_r, a = glyph0_g };
-                // Then other pixels by shifting the first one.
-                for (int j = 1; j < encodings.width - 1; j += 1)
+                // Encode glyphs
+                float convert_to_center_unorm = ((1u << bits_center) - 1u) / line.width_px;
+                foreach (var glyph in line.glyphs)
                 {
-                    float line_x_px = line_px_x_per_encoding_px * j;
-                    if (line.glyphs[current_right_glyph].center_px < line_x_px && current_right_glyph < line.glyphs.Count - 1)
-                    {
-                        // Advance one glyph. Copy previous right glyph.
-                        current_right_glyph += 1;
-                        buffer[offset] = new RGBA_U16
-                        {
-                            r = buffer[offset - 1].b,
-                            g = buffer[offset - 1].a,
-                            b = Mathf.FloatToHalf(line.glyphs[current_right_glyph].atlas_id),
-                            a = Mathf.FloatToHalf(line.glyphs[current_right_glyph].tile_left_px)
-                        };
-                    }
-                    else
-                    {
-                        buffer[offset] = buffer[offset - 1];
-                    }
-                    offset += 1;
+                    buffer[offset++] = ((uint)Mathf.RoundToInt(convert_to_center_unorm * glyph.center_px))
+                        | (glyphs[glyph.atlas_id].advance_unorm << bits_center)
+                        | (glyph.atlas_id << (bits_center + bits_advance));
                 }
+
+                // Repeat glyph data  to ensure last pixel has values for RGBA.
+                // Simplifies shader code, avoids handling a partial pixel.
+                int last_glyph = offset - 1;
+                int end_of_pixel = 4 * ((offset + 3) / 4);
+                for (; offset < end_of_pixel; offset += 1) { buffer[offset] = buffer[last_glyph]; }
             }
             for (int i = layouted_lines.Length; i < encodings.height; i += 1)
             {
                 // Fill padding line config pixels with dummy values in case line_count variable is broken
-                buffer[encodings.width * i] = new RGBA_U16 { r = 0, g = 0, b = 0, a = 0 };
+                int offset = 4 * encodings.width * i;
+                buffer[offset + 0] = 0;
+                buffer[offset + 1] = 0;
+                buffer[offset + 2] = 0;
+                buffer[offset + 3] = 0;
             }
             encodings.Apply();
             return (encodings, layouted_lines.Length);
@@ -458,21 +450,11 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
             public Vector3 offset_scale; // From LineCache
             public List<Glyph> glyphs;
             public float width_px;
-            public float min_inter_center_distance_width_ratio;
             public struct Glyph
             {
-                public int atlas_id;
-                // Offsets
+                public uint atlas_id;
                 public float center_px;
-                public float tile_left_px;
             }
-        }
-        private struct RGBA_U16
-        {
-            public ushort r;
-            public ushort g;
-            public ushort b;
-            public ushort a;
         }
     }
 
