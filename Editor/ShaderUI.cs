@@ -154,7 +154,6 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
         EditorGUI.LabelField(new Rect(gui_line_position_size.x, gui_line_position_size.y, 2 * numeric_field_width, line_height), "Position", style_label_centered);
         EditorGUI.LabelField(new Rect(gui_line_position_size.x + 2 * numeric_field_width, gui_line_position_size.y, numeric_field_width, line_height), "Size", style_label_centered);
         EditorGUI.LabelField(gui_line_text, "Text", style_label_centered);
-        if (line_cache.Dirty)
         {
             bool all_lines_representable = line_cache.Lines.All(line => line.representable);
             GUIStyle style = all_lines_representable ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
