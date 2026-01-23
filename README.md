@@ -21,7 +21,7 @@ TODO
 - A custom `MaterialPropertyDrawer` enables ergonomic edition of the text line texture.
 
 # TODO
-- Kerning support
+- shader Kerning support
 - MaterialPropertyDrawer load from texture.
 - Fix invert impl
 - Back of the card (proper)

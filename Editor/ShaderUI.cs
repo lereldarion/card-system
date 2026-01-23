@@ -285,11 +285,13 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         public readonly Dictionary<char, float> whitespace_advance_px;
         public readonly float font_ascender_pixels;
         public readonly float baseline_pixels;
+        public readonly Dictionary<(char, char), float> kerning_advance_px;
         public struct Glyph
         {
             public char character;
             public float advance_px;
-            public uint advance_unorm; // unorm encoded ratio of grid_cell_usable_pixels.x
+            public float center_px;
+            public uint width_unorm; // unorm encoded ratio of grid_cell_usable_pixels.x
         }
 
         public Font(MetricsJSON metrics)
@@ -310,7 +312,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             // Scan glyphs to find the first with EM size data to use as model, as all glyphs share the same in uniform grid mode.
             Vector2 glyph_em_size = metrics.glyphs.Select(glyph => glyph.planeBounds.Size()).First(size => size != Vector2.zero);
             Vector2 em_to_pixel = ((Vector2)grid_cell_usable_pixels) / glyph_em_size;
-            float convert_to_advance_unorm = ((1u << bits_advance) - 1u) / glyph_em_size.x;
+            float convert_to_advance_unorm = ((1u << bits_width) - 1u) / glyph_em_size.x;
 
             // Glyph pixel info
             font_ascender_pixels = em_to_pixel.y * metrics.metrics.ascender;
@@ -336,21 +338,25 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                     Vector2Int cell_position = Vector2Int.FloorToInt(atlas_glyph_center / grid_cell_pixels);
                     int atlas_id = cell_position.y * grid_dimensions.x + cell_position.x;
 
-                    // The V2 encoding requires a centered advance. MSDF in grid mode is almost centered but not exactly.
-                    // Fix the advance to avoid clipping.
-                    // FIXME a better fix would be to allow advances to overlap (layout advance & draw advances), but costlier and with more edge cases (cross pixel characters)
+                    // The V2 encoding requires a centered width. Advance is the glyph width but is not perfectly centered.
                     float glyph_em_center = glyph.planeBounds.Center().x;
-                    float centered_advance = 2 * Math.Max(glyph_em_center, glyph.advance - glyph_em_center);
+                    float centered_width = 2 * Math.Max(glyph_em_center, glyph.advance - glyph_em_center);
 
                     glyphs[atlas_id] = new Glyph
                     {
                         character = character,
-                        advance_px = em_to_pixel.x * centered_advance,
-                        advance_unorm = (uint)Mathf.RoundToInt(convert_to_advance_unorm * centered_advance),
+                        advance_px = em_to_pixel.x * glyph.advance,
+                        center_px = em_to_pixel.x * glyph_em_center,
+                        width_unorm = (uint)Mathf.RoundToInt(convert_to_advance_unorm * centered_width),
                     };
                     char_to_atlas_id.Add(character, (uint)atlas_id);
                 }
             }
+
+            // Load kernings (advance delta between 2 chars)
+            kerning_advance_px = metrics.kerning.ToDictionary(
+                kerning => ((char)kerning.unicode1, (char)kerning.unicode2),
+                kerning => kerning.advance * em_to_pixel.x);
         }
 
         public bool IsRepresentable(string text) { return text.All(c => char_to_atlas_id.ContainsKey(c) || whitespace_advance_px.ContainsKey(c)); }
@@ -361,29 +367,30 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         // - RG[0..16] = f16 offset, R[16..32] = f16 scaling
         // - B[0..16] = f16 width_px, B[16..32] = u16 glyph count
         // Next pixels in the line : glyphs pixels, 4 by 4. (R->G->B->A)->(R->G->B->A) etc. Last one may have the last glyph repeated to pad.
-        // Each pixel bit-encodes (atlas_id, advance, center_x), the last 2 as Unorm ratios of respectively glyph_width and line_width.
+        // Each pixel bit-encodes (atlas_id, width, center_x), the last 2 as Unorm ratios of respectively glyph_width and line_width.
         private const int bits_atlas_id = 12;
-        private const int bits_advance = 8; // Unorm ratio of glyph_width, resolution of 1/256
-        private const int bits_center = 32 - (bits_advance + bits_atlas_id); // Unorm ratio of line_width, resolution of 1/2^12
+        private const int bits_width = 8; // Unorm ratio of glyph_width, resolution of 1/256
+        private const int bits_center = 32 - (bits_width + bits_atlas_id); // Unorm ratio of line_width, resolution of 1/2^12
         public (Texture2D, int) Encode(LineCache lines)
         {
             // Place characters one after another, computing center positions
             LineWithLayout[] layouted_lines = lines.lines.Select(line =>
             {
                 float current_x = 0;
+                char previous_c = (char)0;
                 var layouted_glyphs = new List<LineWithLayout.Glyph>();
                 foreach (char c in line.text.TrimEnd() /*ignore trailing whitespace*/)
                 {
+                    // Kerning : apply delta
+                    current_x += kerning_advance_px.GetValueOrDefault((previous_c, c));
+                    previous_c = c;
+
                     if (whitespace_advance_px.TryGetValue(c, out float advance)) { current_x += advance; }
                     else
                     {
                         uint atlas_id = char_to_atlas_id[c];
                         var glyph = glyphs[atlas_id];
-                        var entry = new LineWithLayout.Glyph
-                        {
-                            atlas_id = atlas_id,
-                            center_px = current_x + 0.5f * glyph.advance_px,
-                        };
+                        var entry = new LineWithLayout.Glyph { atlas_id = atlas_id, center_px = current_x + glyph.center_px };
                         current_x += glyph.advance_px;
                         layouted_glyphs.Add(entry);
                     }
@@ -395,8 +402,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 float rotation_radians = line.Rotation * Mathf.PI / 180f;
                 Vector4 transform = new Vector4(
                     line.Offset.x, line.Offset.y + baseline_offset,
-                    scale * Mathf.Cos(rotation_radians), scale * Mathf.Sin(rotation_radians)
-                    );
+                    scale * Mathf.Cos(rotation_radians), scale * Mathf.Sin(rotation_radians));
                 return new LineWithLayout
                 {
                     transform = transform,
@@ -437,8 +443,8 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 foreach (var glyph in line.glyphs)
                 {
                     buffer[offset++] = ((uint)Mathf.RoundToInt(convert_to_center_unorm * glyph.center_px))
-                        | (glyphs[glyph.atlas_id].advance_unorm << bits_center)
-                        | (glyph.atlas_id << (bits_center + bits_advance));
+                        | (glyphs[glyph.atlas_id].width_unorm << bits_center)
+                        | (glyph.atlas_id << (bits_center + bits_width));
                 }
 
                 // Repeat glyph data  to ensure last pixel has values for RGBA.

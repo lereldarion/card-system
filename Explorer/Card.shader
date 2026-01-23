@@ -189,8 +189,8 @@ Shader "Lereldarion/Card/Explorer" {
 
             float sdf_lereldarion_text_lines(float2 uv, Texture2D<float3> font_atlas, float4 font_config, Texture2D<float4> encodings, uint line_count) {
                 const uint bits_atlas_id = 12; const uint bits_atlas_id_mask = (1u << bits_atlas_id) - 1u;
-                const uint bits_advance = 8; const uint bits_advance_mask = (1u << bits_advance) - 1u;
-                const uint bits_center = 32 - (bits_atlas_id + bits_advance); const uint bits_center_mask = (1u << bits_center) - 1u;
+                const uint bits_width = 8; const uint bits_width_mask = (1u << bits_width) - 1u;
+                const uint bits_center = 32 - (bits_atlas_id + bits_width); const uint bits_center_mask = (1u << bits_center) - 1u;
 
                 uint2 encodings_pixels;
                 encodings.GetDimensions(encodings_pixels.x, encodings_pixels.y);
@@ -237,8 +237,8 @@ Shader "Lereldarion/Card/Explorer" {
                             uint4 pixel = asuint(encodings[uint2(glyph_array_index, i)]);
                             const float4 centers = float4(pixel & bits_center_mask) / float(bits_center_mask) * line_width_px;
                             pixel = pixel >> bits_center;
-                            const float4 half_advances = 0.5 * float4(pixel & bits_advance_mask) / float(bits_advance_mask) * glyph_usable_pixels.x;
-                            const uint4 atlas_ids = pixel >> bits_advance;
+                            const float4 half_advances = 0.5 * float4(pixel & bits_width_mask) / float(bits_width_mask) * glyph_usable_pixels.x;
+                            const uint4 atlas_ids = pixel >> bits_width;
 
                             const float4 glyph_x_px_centereds = line_px.x - centers;
 
