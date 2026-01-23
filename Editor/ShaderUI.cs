@@ -472,6 +472,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         public Atlas atlas;
         public Metrics metrics;
         public Glyph[] glyphs;
+        public Kerning[] kerning;
 
         [Serializable]
         public struct Atlas
@@ -526,6 +527,13 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 public Vector2 Size() { return new Vector2(right - left, top - left); }
                 public Vector2 Center() { return 0.5f * new Vector2(left + right, bottom + top); }
             }
+        }
+        [Serializable]
+        public struct Kerning
+        {
+            public int unicode1;
+            public int unicode2;
+            public float advance; // EM
         }
     }
 

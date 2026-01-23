@@ -11,6 +11,10 @@ Derivative work : a subset of characters (`charset.txt`) has been converted to [
 
 Uses default 2px SDF range.
 
+MSDF-atlas-gen does not detect the newer kerning format in the downloaded Orbitron.
+To generate the proper kerning data, open the font with `fontforge` and export it with legacy kern data.
+See https://github.com/Chlumsky/msdf-atlas-gen/issues/4 for more details.
+
 `orbitron.metrics.json` is referenced by the `MaterialPropertyDrawer` to properly position letters.
 It **must** be placed alongside the `orbitron.png` font MSDF texture, so that the `MaterialPropertyDrawer` can locate it from the texture asset path (replace extension by `.metrics.json`).
 

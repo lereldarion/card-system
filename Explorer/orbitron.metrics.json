@@ -1789,5 +1789,956 @@
             }
         }
     ],
-    "kerning": []
+    "kerning": [
+        {
+            "unicode1": 63,
+            "unicode2": 118,
+            "advance": -0.001
+        },
+        {
+            "unicode1": 65,
+            "unicode2": 87,
+            "advance": -0.031
+        },
+        {
+            "unicode1": 65,
+            "unicode2": 89,
+            "advance": -0.013000000000000001
+        },
+        {
+            "unicode1": 66,
+            "unicode2": 86,
+            "advance": -0.049000000000000002
+        },
+        {
+            "unicode1": 66,
+            "unicode2": 89,
+            "advance": -0.031
+        },
+        {
+            "unicode1": 68,
+            "unicode2": 86,
+            "advance": -0.029000000000000001
+        },
+        {
+            "unicode1": 68,
+            "unicode2": 90,
+            "advance": -0.027
+        },
+        {
+            "unicode1": 69,
+            "unicode2": 77,
+            "advance": -0.029000000000000001
+        },
+        {
+            "unicode1": 69,
+            "unicode2": 79,
+            "advance": -0.031
+        },
+        {
+            "unicode1": 70,
+            "unicode2": 46,
+            "advance": -0.128
+        },
+        {
+            "unicode1": 70,
+            "unicode2": 74,
+            "advance": -0.23999999999999999
+        },
+        {
+            "unicode1": 70,
+            "unicode2": 82,
+            "advance": 0.0050000000000000001
+        },
+        {
+            "unicode1": 70,
+            "unicode2": 84,
+            "advance": 0.01
+        },
+        {
+            "unicode1": 70,
+            "unicode2": 121,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 71,
+            "unicode2": 87,
+            "advance": -0.027
+        },
+        {
+            "unicode1": 75,
+            "unicode2": 65,
+            "advance": -0.029999999999999999
+        },
+        {
+            "unicode1": 75,
+            "unicode2": 72,
+            "advance": -0.029000000000000001
+        },
+        {
+            "unicode1": 76,
+            "unicode2": 86,
+            "advance": -0.23100000000000001
+        },
+        {
+            "unicode1": 76,
+            "unicode2": 87,
+            "advance": -0.129
+        },
+        {
+            "unicode1": 76,
+            "unicode2": 89,
+            "advance": -0.17899999999999999
+        },
+        {
+            "unicode1": 77,
+            "unicode2": 99,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 79,
+            "unicode2": 86,
+            "advance": -0.027
+        },
+        {
+            "unicode1": 79,
+            "unicode2": 87,
+            "advance": -0.027
+        },
+        {
+            "unicode1": 79,
+            "unicode2": 88,
+            "advance": -0.039
+        },
+        {
+            "unicode1": 80,
+            "unicode2": 65,
+            "advance": 0.01
+        },
+        {
+            "unicode1": 80,
+            "unicode2": 74,
+            "advance": -0.187
+        },
+        {
+            "unicode1": 80,
+            "unicode2": 100,
+            "advance": 0.01
+        },
+        {
+            "unicode1": 80,
+            "unicode2": 118,
+            "advance": 0.001
+        },
+        {
+            "unicode1": 82,
+            "unicode2": 86,
+            "advance": -0.019
+        },
+        {
+            "unicode1": 82,
+            "unicode2": 87,
+            "advance": -0.019
+        },
+        {
+            "unicode1": 83,
+            "unicode2": 78,
+            "advance": -0.019
+        },
+        {
+            "unicode1": 83,
+            "unicode2": 87,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 83,
+            "unicode2": 89,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 84,
+            "unicode2": 111,
+            "advance": -0.123
+        },
+        {
+            "unicode1": 84,
+            "unicode2": 115,
+            "advance": -0.121
+        },
+        {
+            "unicode1": 84,
+            "unicode2": 117,
+            "advance": -0.10100000000000001
+        },
+        {
+            "unicode1": 84,
+            "unicode2": 119,
+            "advance": -0.083000000000000004
+        },
+        {
+            "unicode1": 84,
+            "unicode2": 121,
+            "advance": -0.090999999999999998
+        },
+        {
+            "unicode1": 84,
+            "unicode2": 122,
+            "advance": -0.10300000000000001
+        },
+        {
+            "unicode1": 86,
+            "unicode2": 65,
+            "advance": -0.036999999999999998
+        },
+        {
+            "unicode1": 86,
+            "unicode2": 79,
+            "advance": -0.033000000000000002
+        },
+        {
+            "unicode1": 86,
+            "unicode2": 83,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 86,
+            "unicode2": 111,
+            "advance": -0.029999999999999999
+        },
+        {
+            "unicode1": 86,
+            "unicode2": 115,
+            "advance": -0.040000000000000001
+        },
+        {
+            "unicode1": 87,
+            "unicode2": 65,
+            "advance": -0.027
+        },
+        {
+            "unicode1": 87,
+            "unicode2": 79,
+            "advance": -0.023
+        },
+        {
+            "unicode1": 87,
+            "unicode2": 97,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 87,
+            "unicode2": 101,
+            "advance": -0.035000000000000003
+        },
+        {
+            "unicode1": 87,
+            "unicode2": 105,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 87,
+            "unicode2": 111,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 87,
+            "unicode2": 117,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 88,
+            "unicode2": 66,
+            "advance": -0.035000000000000003
+        },
+        {
+            "unicode1": 89,
+            "unicode2": 83,
+            "advance": -0.035000000000000003
+        },
+        {
+            "unicode1": 89,
+            "unicode2": 97,
+            "advance": -0.097000000000000003
+        },
+        {
+            "unicode1": 89,
+            "unicode2": 101,
+            "advance": -0.11900000000000001
+        },
+        {
+            "unicode1": 89,
+            "unicode2": 105,
+            "advance": -0.019
+        },
+        {
+            "unicode1": 89,
+            "unicode2": 111,
+            "advance": -0.11900000000000001
+        },
+        {
+            "unicode1": 89,
+            "unicode2": 112,
+            "advance": -0.099000000000000005
+        },
+        {
+            "unicode1": 89,
+            "unicode2": 115,
+            "advance": -0.11700000000000001
+        },
+        {
+            "unicode1": 89,
+            "unicode2": 117,
+            "advance": -0.097000000000000003
+        },
+        {
+            "unicode1": 90,
+            "unicode2": 89,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 98,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 99,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 108,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 109,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 110,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 114,
+            "advance": -0.0050000000000000001
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 115,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 118,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 119,
+            "advance": -0.029999999999999999
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 120,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 97,
+            "unicode2": 122,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 98,
+            "unicode2": 100,
+            "advance": 0.029999999999999999
+        },
+        {
+            "unicode1": 99,
+            "unicode2": 101,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 99,
+            "unicode2": 104,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 99,
+            "unicode2": 107,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 99,
+            "unicode2": 116,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 99,
+            "unicode2": 117,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 99,
+            "unicode2": 122,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 100,
+            "unicode2": 101,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 100,
+            "unicode2": 111,
+            "advance": -0.021999999999999999
+        },
+        {
+            "unicode1": 100,
+            "unicode2": 117,
+            "advance": -0.023
+        },
+        {
+            "unicode1": 101,
+            "unicode2": 99,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 101,
+            "unicode2": 101,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 101,
+            "unicode2": 108,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 101,
+            "unicode2": 114,
+            "advance": -0.0050000000000000001
+        },
+        {
+            "unicode1": 101,
+            "unicode2": 118,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 101,
+            "unicode2": 119,
+            "advance": -0.029999999999999999
+        },
+        {
+            "unicode1": 101,
+            "unicode2": 120,
+            "advance": -0.017000000000000001
+        },
+        {
+            "unicode1": 102,
+            "unicode2": 44,
+            "advance": -0.18099999999999999
+        },
+        {
+            "unicode1": 102,
+            "unicode2": 116,
+            "advance": 0.0050000000000000001
+        },
+        {
+            "unicode1": 102,
+            "unicode2": 117,
+            "advance": 0.01
+        },
+        {
+            "unicode1": 103,
+            "unicode2": 97,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 103,
+            "unicode2": 99,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 103,
+            "unicode2": 101,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 103,
+            "unicode2": 111,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 103,
+            "unicode2": 114,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 103,
+            "unicode2": 115,
+            "advance": -0.021000000000000001
+        },
+        {
+            "unicode1": 103,
+            "unicode2": 117,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 103,
+            "unicode2": 119,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 104,
+            "unicode2": 97,
+            "advance": 0.0050000000000000001
+        },
+        {
+            "unicode1": 104,
+            "unicode2": 102,
+            "advance": 0.01
+        },
+        {
+            "unicode1": 104,
+            "unicode2": 105,
+            "advance": 0.0050000000000000001
+        },
+        {
+            "unicode1": 105,
+            "unicode2": 97,
+            "advance": -0.035000000000000003
+        },
+        {
+            "unicode1": 105,
+            "unicode2": 99,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 105,
+            "unicode2": 102,
+            "advance": -0.047
+        },
+        {
+            "unicode1": 105,
+            "unicode2": 110,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 105,
+            "unicode2": 112,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 105,
+            "unicode2": 113,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 105,
+            "unicode2": 118,
+            "advance": -0.0050000000000000001
+        },
+        {
+            "unicode1": 105,
+            "unicode2": 120,
+            "advance": -0.041000000000000002
+        },
+        {
+            "unicode1": 106,
+            "unicode2": 101,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 107,
+            "unicode2": 101,
+            "advance": -0.0050000000000000001
+        },
+        {
+            "unicode1": 108,
+            "unicode2": 97,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 108,
+            "unicode2": 100,
+            "advance": 0.0050000000000000001
+        },
+        {
+            "unicode1": 108,
+            "unicode2": 101,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 108,
+            "unicode2": 109,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 108,
+            "unicode2": 111,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 108,
+            "unicode2": 118,
+            "advance": -0.059000000000000004
+        },
+        {
+            "unicode1": 108,
+            "unicode2": 119,
+            "advance": -0.065000000000000002
+        },
+        {
+            "unicode1": 109,
+            "unicode2": 107,
+            "advance": -0.013000000000000001
+        },
+        {
+            "unicode1": 109,
+            "unicode2": 109,
+            "advance": -0.013000000000000001
+        },
+        {
+            "unicode1": 109,
+            "unicode2": 119,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 110,
+            "unicode2": 98,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 110,
+            "unicode2": 99,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 110,
+            "unicode2": 111,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 110,
+            "unicode2": 112,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 110,
+            "unicode2": 120,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 97,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 108,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 110,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 111,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 114,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 115,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 116,
+            "advance": -0.023
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 117,
+            "advance": -0.023
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 118,
+            "advance": -0.013000000000000001
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 119,
+            "advance": -0.035000000000000003
+        },
+        {
+            "unicode1": 111,
+            "unicode2": 120,
+            "advance": -0.035000000000000003
+        },
+        {
+            "unicode1": 112,
+            "unicode2": 100,
+            "advance": 0.025000000000000001
+        },
+        {
+            "unicode1": 112,
+            "unicode2": 105,
+            "advance": 0.014999999999999999
+        },
+        {
+            "unicode1": 112,
+            "unicode2": 115,
+            "advance": 0.01
+        },
+        {
+            "unicode1": 113,
+            "unicode2": 117,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 114,
+            "unicode2": 44,
+            "advance": -0.24299999999999999
+        },
+        {
+            "unicode1": 114,
+            "unicode2": 46,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 114,
+            "unicode2": 111,
+            "advance": -0.0050000000000000001
+        },
+        {
+            "unicode1": 115,
+            "unicode2": 99,
+            "advance": -0.019
+        },
+        {
+            "unicode1": 115,
+            "unicode2": 101,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 115,
+            "unicode2": 107,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 115,
+            "unicode2": 110,
+            "advance": -0.023
+        },
+        {
+            "unicode1": 115,
+            "unicode2": 117,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 115,
+            "unicode2": 118,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 115,
+            "unicode2": 120,
+            "advance": -0.036999999999999998
+        },
+        {
+            "unicode1": 115,
+            "unicode2": 122,
+            "advance": -0.023
+        },
+        {
+            "unicode1": 116,
+            "unicode2": 98,
+            "advance": 0.0050000000000000001
+        },
+        {
+            "unicode1": 116,
+            "unicode2": 100,
+            "advance": 0.02
+        },
+        {
+            "unicode1": 116,
+            "unicode2": 104,
+            "advance": 0.0050000000000000001
+        },
+        {
+            "unicode1": 116,
+            "unicode2": 105,
+            "advance": 0.0050000000000000001
+        },
+        {
+            "unicode1": 116,
+            "unicode2": 122,
+            "advance": 0.0050000000000000001
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 98,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 99,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 100,
+            "advance": 0.01
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 101,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 102,
+            "advance": -0.01
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 109,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 110,
+            "advance": 0.0050000000000000001
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 112,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 115,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 116,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 120,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 117,
+            "unicode2": 122,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 118,
+            "unicode2": 101,
+            "advance": -0.029999999999999999
+        },
+        {
+            "unicode1": 118,
+            "unicode2": 111,
+            "advance": -0.029000000000000001
+        },
+        {
+            "unicode1": 118,
+            "unicode2": 115,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 119,
+            "unicode2": 101,
+            "advance": -0.032000000000000001
+        },
+        {
+            "unicode1": 119,
+            "unicode2": 111,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 119,
+            "unicode2": 114,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 119,
+            "unicode2": 115,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 120,
+            "unicode2": 101,
+            "advance": -0.049000000000000002
+        },
+        {
+            "unicode1": 121,
+            "unicode2": 97,
+            "advance": -0.023
+        },
+        {
+            "unicode1": 121,
+            "unicode2": 99,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 121,
+            "unicode2": 101,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 121,
+            "unicode2": 108,
+            "advance": 0.01
+        },
+        {
+            "unicode1": 121,
+            "unicode2": 110,
+            "advance": -0.014999999999999999
+        },
+        {
+            "unicode1": 121,
+            "unicode2": 111,
+            "advance": -0.023
+        },
+        {
+            "unicode1": 122,
+            "unicode2": 97,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 122,
+            "unicode2": 101,
+            "advance": -0.025000000000000001
+        },
+        {
+            "unicode1": 122,
+            "unicode2": 108,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 122,
+            "unicode2": 116,
+            "advance": -0.02
+        },
+        {
+            "unicode1": 122,
+            "unicode2": 122,
+            "advance": -0.02
+        }
+    ]
 }
