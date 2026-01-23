@@ -10,7 +10,7 @@ using System;
 // Editor interface for text encoded to texture tables.
 //
 // Usage : tag a set of properties that encode text.
-// [LereldarionTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
+// [LereldarionCardTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
 // _Text_LineCount("Text line count", Integer) = 0
 // _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
 // _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
@@ -20,7 +20,7 @@ using System;
 // Position is an offset in input UV.
 // Size is set so that 1 input UV.y unit goes from font baseline to ascender height (https://en.wikipedia.org/wiki/Typeface#Font_metrics).
 // Shader-side, a signed distance function at input UV scale is returned, with negative = interior of characters.
-public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
+public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 {
     // Values from shader property arguments
     private readonly string font_texture_property_name = null;
@@ -42,7 +42,7 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
     private bool gui_section_foldout = true;
     private string gui_error = "";
 
-    public LereldarionTextLinesDrawer(string font_texture_property_name, string font_config_property_name, string line_count_property_name)
+    public LereldarionCardTextLinesDrawer(string font_texture_property_name, string font_config_property_name, string line_count_property_name)
     {
         // Unity already splits by ',' and trims whitespace
         this.font_texture_property_name = font_texture_property_name;
@@ -67,10 +67,10 @@ public class LereldarionTextLinesDrawer : MaterialPropertyDrawer
 
             // Shader sanity check, once per material change.
             // Shader modification forces reloading the drawer class for a recheck, no need to check for shader change.
-            if (encoding_texture_prop.type != MaterialProperty.PropType.Texture) { gui_error = "[LereldarionTextLines(...)] must be applied to a Texture2D shader property"; return; }
-            if (!material.HasTexture(font_texture_property_name)) { gui_error = "LereldarionTextLines(font_texture_property_name, _, _) must point to a Texture shader property"; return; }
-            if (!material.HasVector(font_config_property_name)) { gui_error = "LereldarionTextLines(_, font_config_property_name, _) must point to an Vector shader property"; return; }
-            if (!material.HasInteger(line_count_property_name)) { gui_error = "LereldarionTextLines(_, _, line_count_property_name) must point to an Integer shader property"; return; }
+            if (encoding_texture_prop.type != MaterialProperty.PropType.Texture) { gui_error = "[LereldarionCardTextLines(...)] must be applied to a Texture2D shader property"; return; }
+            if (!material.HasTexture(font_texture_property_name)) { gui_error = "LereldarionCardTextLines(font_texture_property_name, _, _) must point to a Texture shader property"; return; }
+            if (!material.HasVector(font_config_property_name)) { gui_error = "LereldarionCardTextLines(_, font_config_property_name, _) must point to an Vector shader property"; return; }
+            if (!material.HasInteger(line_count_property_name)) { gui_error = "LereldarionCardTextLines(_, _, line_count_property_name) must point to an Integer shader property"; return; }
 
             cache_state = CachedState.SelectionAndShaderProperties;
         }

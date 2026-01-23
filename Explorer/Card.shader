@@ -41,7 +41,7 @@ Shader "Lereldarion/ExplorerCard" {
         // _Logo_MSDF_Texture_Size("Logo MSDF texture size", Float) = 128
 
         [Header(Text)]
-        [LereldarionTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
+        [LereldarionCardTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
         _Text_LineCount("Text line count", Integer) = 0
         _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
         _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
