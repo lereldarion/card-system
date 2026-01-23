@@ -128,7 +128,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_height);
         GUIStyle style_label_centered = new GUIStyle(EditorStyles.label); style_label_centered.alignment = TextAnchor.MiddleCenter;
         GUIStyle invalid_text_field = StyleWithRedText(EditorStyles.textField);
-        float numeric_field_width = 4 * line_height;
+        float numeric_field_width = 4f * line_height;
 
         // Section folding
         gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, label);
@@ -146,54 +146,51 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 
         // Column positions
         Rect gui_list_button = new Rect(gui_full_line.x, gui_full_line.y, line_height, line_height);
-        Rect gui_line_position_size = new Rect(gui_list_button.xMax + 1, gui_full_line.y, 3 * numeric_field_width, line_height);
-        Rect gui_line_text = new Rect(gui_line_position_size.xMax + 1, gui_full_line.y, gui_full_line.xMax - gui_line_position_size.xMax, line_height);
+        Rect gui_line_transform = new Rect(gui_list_button.xMax + 1, gui_full_line.y, 4 * numeric_field_width, line_height);
+        Rect gui_line_text = new Rect(gui_line_transform.xMax + 1, gui_full_line.y, gui_full_line.xMax - gui_line_transform.xMax, line_height);
 
         // Header line
         if (GUI.Button(gui_list_button, "+")) { line_cache.Add(); }
-        EditorGUI.LabelField(new Rect(gui_line_position_size.x, gui_line_position_size.y, 2 * numeric_field_width, line_height), "Position", style_label_centered);
-        EditorGUI.LabelField(new Rect(gui_line_position_size.x + 2 * numeric_field_width, gui_line_position_size.y, numeric_field_width, line_height), "Size", style_label_centered);
+        EditorGUI.LabelField(new Rect(gui_line_transform.x, gui_line_transform.y, 2 * numeric_field_width, line_height), "Offset", style_label_centered);
+        EditorGUI.LabelField(new Rect(gui_line_transform.x + 2 * numeric_field_width, gui_line_transform.y, numeric_field_width, line_height), "Size", style_label_centered);
+        EditorGUI.LabelField(new Rect(gui_line_transform.x + 3 * numeric_field_width, gui_line_transform.y, numeric_field_width, line_height), "Rotation", style_label_centered);
         EditorGUI.LabelField(gui_line_text, "Text", style_label_centered);
+
+        GUIStyle save_button_style = line_cache.AllRepresentable() ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
+        if (GUI.Button(new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Save", save_button_style) && line_cache.AllRepresentable())
         {
-            bool all_lines_representable = line_cache.Lines.All(line => line.representable);
-            GUIStyle style = all_lines_representable ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
-            if (GUI.Button(new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Save", style) && all_lines_representable)
+            var (encoding_texture, line_count) = font.Encode(line_cache);
+
+            // Manage asset database. Try to keep the asset_path cached even if temporarily deleted.
+            if (encoding_texture is null)
             {
-                var (encoding_texture, line_count) = font.Encode(line_cache);
-
-                // Manage asset database. Try to keep the asset_path cached even if temporarily deleted.
-                if (encoding_texture is null)
-                {
-                    if (AssetDatabase.Contains(current_encoding_texture)) { AssetDatabase.DeleteAsset(current_encoding_texture_asset_path); }
-                }
-                else
-                {
-                    if (current_encoding_texture_asset_path is null || current_encoding_texture_asset_path == "")
-                    {
-                        current_encoding_texture_asset_path = System.IO.Path.ChangeExtension(AssetDatabase.GetAssetPath(editor.target), $".{encoding_texture_prop.name}.asset");
-                    }
-                    AssetDatabase.CreateAsset(encoding_texture, current_encoding_texture_asset_path);
-                }
-
-                material.SetVector(font_config_property_name, new Vector4(font.grid_cell_pixels.x, font.grid_cell_pixels.y, font.grid_dimensions.x, font.msdf_pixel_range));
-                material.SetInteger(line_count_property_name, line_count);
-                material.SetTexture(encoding_texture_prop.name, encoding_texture);
-
-                // Cache status
-                current_encoding_texture = encoding_texture;
-                line_cache.Dirty = false;
+                if (AssetDatabase.Contains(current_encoding_texture)) { AssetDatabase.DeleteAsset(current_encoding_texture_asset_path); }
             }
-            if (GUI.Button(new Rect(gui_line_text.x + 0.8f * gui_line_text.width, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Reset"))
+            else
             {
-                line_cache = new LineCache(current_encoding_texture, font);
+                if (current_encoding_texture_asset_path is null || current_encoding_texture_asset_path == "")
+                {
+                    current_encoding_texture_asset_path = System.IO.Path.ChangeExtension(AssetDatabase.GetAssetPath(editor.target), $".{encoding_texture_prop.name}.asset");
+                }
+                AssetDatabase.CreateAsset(encoding_texture, current_encoding_texture_asset_path);
             }
+
+            material.SetVector(font_config_property_name, new Vector4(font.grid_cell_pixels.x, font.grid_cell_pixels.y, font.grid_dimensions.x, font.msdf_pixel_range));
+            material.SetInteger(line_count_property_name, line_count);
+            material.SetTexture(encoding_texture_prop.name, encoding_texture);
+
+            current_encoding_texture = encoding_texture;
+        }
+        if (GUI.Button(new Rect(gui_line_text.x + 0.8f * gui_line_text.width, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Reload"))
+        {
+            line_cache = new LineCache(current_encoding_texture, font);
         }
 
         // Lines of text metadata
         for (int i = 0; i < line_cache.Lines.Count; i += 1)
         {
             gui_list_button.y += line_spacing;
-            gui_line_position_size.y += line_spacing;
+            gui_line_transform.y += line_spacing;
             gui_line_text.y += line_spacing;
             if (GUI.Button(gui_list_button, "x"))
             {
@@ -202,8 +199,8 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             }
             else
             {
-                // Combine position & size to use the ergonomic Vector3Field GUI element : XYZ labels allow changing value smoothly with mouse.
-                line_cache.SetLinePositionSize(i, EditorGUI.Vector3Field(gui_line_position_size, GUIContent.none, line_cache.Lines[i].PositionSize));
+                // Combine position & size to use the ergonomic Vector4Field GUI element : XYZW labels allow changing value smoothly with mouse.
+                line_cache.SetLineTransform(i, EditorGUI.Vector4Field(gui_line_transform, GUIContent.none, line_cache.Lines[i].Transform));
                 GUIStyle style = line_cache.Lines[i].representable ? EditorStyles.textField : invalid_text_field;
                 line_cache.SetLineText(i, EditorGUI.TextField(gui_line_text, line_cache.Lines[i].text, style));
             }
@@ -222,17 +219,16 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 
     private class LineCache
     {
-        private Font font;
-        // Cached state of text system. Read from texture, store to texture.
         private List<Line> lines;
-        public bool Dirty = false;
+        private bool? all_lines_representable = null;
+        private Font font;
 
         public List<Line> Lines { get { return lines; } }
 
         public LineCache(Texture encoding, Font font)
         {
             lines = new List<Line>();
-            Dirty = false;
+            all_lines_representable = true;
             this.font = font;
             // TODO read from encoding if is exists
         }
@@ -240,33 +236,37 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         public void Add()
         {
             lines.Add(new Line());
-            Dirty = true;
         }
         public void RemoveAt(int i)
         {
             lines.RemoveAt(i);
-            Dirty = true;
+            all_lines_representable = null;
         }
-        public void SetLinePositionSize(int i, Vector3 position_size)
+        public void SetLineTransform(int i, Vector4 transform)
         {
-            Dirty = Dirty || lines[i].PositionSize != position_size;
-            lines[i].PositionSize = position_size;
+            lines[i].Transform = transform;
         }
         public void SetLineText(int i, string text)
         {
             if (lines[i].text != text)
             {
-                Dirty = true;
                 lines[i].text = text;
                 lines[i].representable = font.IsRepresentable(text);
+                all_lines_representable = null;
             }
+        }
+        public bool AllRepresentable()
+        {
+            if (all_lines_representable is null) { all_lines_representable = lines.All(line => line.representable); }
+            return (bool)all_lines_representable;
         }
 
         public class Line
         {
-            public Vector3 PositionSize = new Vector3(0, 0, 1);
-            public float Size { get => PositionSize.z; }
-            public Vector2 Position { get => PositionSize; }
+            public Vector4 Transform = new Vector4(0, 0, 1, 0);
+            public Vector2 Offset { get => Transform; }
+            public float Size { get => Transform.z; }
+            public float Rotation { get => Transform.w; }
             public string text = "";
             public bool representable = true;
         }
@@ -389,9 +389,18 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                         layouted_glyphs.Add(entry);
                     }
                 }
+
+                // Line transform
+                float scale = font_ascender_pixels / line.Size; // At size 1, 1uvy * scale = font_ascender_pixels.
+                float baseline_offset = -baseline_pixels / scale;
+                float rotation_radians = line.Rotation * Mathf.PI / 180f;
+                Vector4 transform = new Vector4(
+                    line.Offset.x, line.Offset.y + baseline_offset,
+                    scale * Mathf.Cos(rotation_radians), scale * Mathf.Sin(rotation_radians)
+                    );
                 return new LineWithLayout
                 {
-                    offset_scale = line.PositionSize,
+                    transform = transform,
                     glyphs = layouted_glyphs,
                     width_px = current_x,
                 };
@@ -416,13 +425,12 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 int offset = 4 * encodings.width * i;
                 LineWithLayout line = layouted_lines[i];
                 // Control pixel.
-                // TODO fit offset/scale to better position
-                // TODO rotation
+                // TODO inverse text (-sdf)
                 // TODO spare space. Could be used for effects like bold or color storage (RGB8 unorm) ?
-                buffer[offset + 0] = ((uint)Mathf.FloatToHalf(line.offset_scale.x)) | (((uint)Mathf.FloatToHalf(line.width_px)) << 16);
-                buffer[offset + 1] = ((uint)Mathf.FloatToHalf(line.offset_scale.y)) | (((uint)line.glyphs.Count) << 16);
-                buffer[offset + 2] = (uint)Mathf.FloatToHalf(line.offset_scale.z);
-                buffer[offset + 3] = 0;
+                buffer[offset + 0] = ((uint)Mathf.FloatToHalf(line.transform.x)) | (((uint)Mathf.FloatToHalf(line.width_px)) << 16);
+                buffer[offset + 1] = ((uint)Mathf.FloatToHalf(line.transform.y)) | (((uint)line.glyphs.Count) << 16);
+                buffer[offset + 2] = (uint)Mathf.FloatToHalf(line.transform.z);
+                buffer[offset + 3] = (uint)Mathf.FloatToHalf(line.transform.w);
                 offset += 4;
 
                 // Encode glyphs
@@ -454,7 +462,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         }
         private struct LineWithLayout
         {
-            public Vector3 offset_scale; // From LineCache
+            public Vector4 transform; // From LineCache
             public List<Glyph> glyphs;
             public float width_px;
             public struct Glyph

@@ -21,7 +21,6 @@ TODO
 - A custom `MaterialPropertyDrawer` enables ergonomic edition of the text line texture.
 
 # TODO
-- MaterialPropertyDrawer : generate nice offset/scale based on font metrics
 - MaterialPropertyDrawer load from texture.
 - MaterialPropertyDrawer instant feedback ?
 - Back of the card (proper)

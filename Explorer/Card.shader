@@ -210,15 +210,20 @@ Shader "Lereldarion/Card/Explorer" {
                     // Decode control pixel.
                     const uint4 control = asuint(encodings[uint2(0, i)]);
                     const uint4 control_upper = control >> 16;
-                    const float3 offset_scale = f16tof32(control.rgb);
+                    const float4 transform = f16tof32(control);
                     const float line_width_px = f16tof32(control_upper.x);
                     if(line_width_px == 0) { break; } // Fallback stop
                     const uint glyph_count = control_upper.y;
 
-                    const float2 line_px = (uv - offset_scale.xy) * offset_scale.z; // Convert to glyph pixel scale and offset
+                    // Apply 2D transform to convert to line referential, in glyph pixel units.
+                    // transform=(offset.xy, scale_cos, scale_sin)
+                    const float2x2 scale_rotation = float2x2(transform.z, transform.w, -transform.w, transform.z);
+                    const float2 line_px = mul(scale_rotation, uv - transform.xy);
 
                     // Text rectangle bounding box test.
                     if(all(0 <= line_px && line_px <= float2(line_width_px, glyph_usable_pixels.y))) {
+                        // Scale for rescaling signed distance after sample
+                        const float inverse_scale = 1. / length(transform.zw);
                         // Glyph array : packed 4 per pixel. Start at 1 to leave space for control.
                         uint glyph_array_start = 1;
                         uint glyph_array_end = 1 + (glyph_count - 1) / 4;
@@ -271,7 +276,7 @@ Shader "Lereldarion/Card/Explorer" {
                                 const float tex_sd = median(font_atlas.SampleLevel(sampler_clamp_bilinear, (glyph_px + atlas_offset_px) * atlas_pixel_to_uv, 0)) - 0.5;
                                 // tex_sd is in [-0.5, 0.5]. It represents texture pixel ranges between [-msdf_pixel_range, msdf_pixel_range], using the inverse SDF direction.
                                 const float tex_sd_pixel = -tex_sd * 2 * msdf_pixel_range;
-                                sd = min(sd, tex_sd_pixel / offset_scale.z);
+                                sd = min(sd, tex_sd_pixel * inverse_scale);
                             }
                             break;
                         }
