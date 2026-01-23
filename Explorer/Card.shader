@@ -211,7 +211,8 @@ Shader "Lereldarion/Card/Explorer" {
                     const uint4 control = asuint(encodings[uint2(0, i)]);
                     const uint4 control_upper = control >> 16;
                     const float4 transform = f16tof32(control);
-                    const float line_width_px = f16tof32(control_upper.x);
+                    const float control_upper_r = f16tof32(control_upper.x);
+                    const float line_width_px = abs(control_upper_r);
                     if(line_width_px == 0) { break; } // Fallback stop
                     const uint glyph_count = control_upper.y;
 
@@ -222,8 +223,8 @@ Shader "Lereldarion/Card/Explorer" {
 
                     // Text rectangle bounding box test.
                     if(all(0 <= line_px && line_px <= float2(line_width_px, glyph_usable_pixels.y))) {
-                        // Scale for rescaling signed distance after sample
-                        const float inverse_scale = 1. / length(transform.zw);
+                        // Scale for rescaling signed distance after sample. Sign of control_upper_r is inverted flag.
+                        const float inverse_scale = sign(control_upper_r) / length(transform.zw);
                         // Glyph array : packed 4 per pixel. Start at 1 to leave space for control.
                         uint glyph_array_start = 1;
                         uint glyph_array_end = 1 + (glyph_count - 1) / 4;
@@ -266,9 +267,6 @@ Shader "Lereldarion/Card/Explorer" {
                             }
 
                             if(atlas_id <= bits_atlas_id_mask) {
-                                //float selected_offset = dot(within_glyph ? 1 : 0, glyph_x_px_centered);
-                                //uint selected_atlas_id = dot(within_glyph ? 1 : 0, atlas_ids);
-
                                 float2 glyph_px = float2(glyph_x_px_centered + 0.5 * glyph_usable_pixels.x, line_px.y);
                                 const uint atlas_row = atlas_id / glyph_columns;
                                 const uint atlas_column = atlas_id - atlas_row * glyph_columns;
