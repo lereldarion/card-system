@@ -39,12 +39,13 @@ Shader "Lereldarion/ExplorerCard" {
         // _Logo_Rotation_Scale_Offset("Logo rotation, scale, offset", Vector) = (23, 0.41, 0.19, -0.097)
         // _Logo_MSDF_Pixel_Range("Logo MSDF pixel range", Float) = 8
         // _Logo_MSDF_Texture_Size("Logo MSDF texture size", Float) = 128
+        _Logo_Back_Size("Card back logo size", Float) = 0.35
 
         [Header(Text)]
         [LereldarionCardTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
-        _Text_LineCount("Text line count", Integer) = 0
-        _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
-        _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
+        [HideInInspector] _Text_LineCount("Text line count", Integer) = 0
+        [NoScaleOffset] _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
+        [HideInInspector] _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
     }
     SubShader {
         Tags {
@@ -55,7 +56,7 @@ Shader "Lereldarion/ExplorerCard" {
         }
 
         Pass {
-            Cull Back
+            Cull Off
             ZTest LEqual
             ZWrite On
             Blend Off
@@ -121,6 +122,7 @@ Shader "Lereldarion/ExplorerCard" {
             static const float4 _Logo_Rotation_Scale_Offset = float4(23, 0.41, 0.19, -0.097);
             static const float _Logo_MSDF_Pixel_Range = 8;
             static const float _Logo_MSDF_Texture_Size = 128;
+            uniform float _Logo_Back_Size;
 
             uniform Texture2D<float4> _Text_Encoding_Texture; // uint4 but must use float4 due to unity refusing to create a u32x4 texture. Bitcast !
             uniform uint _Text_LineCount;
@@ -278,7 +280,7 @@ Shader "Lereldarion/ExplorerCard" {
                 return sd;
             }
 
-            fixed4 fragment_stage(FragmentInput input) : SV_Target {
+            fixed4 fragment_stage(FragmentInput input, bool is_front_face : SV_IsFrontFace) : SV_Target {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
                 // Mesh info
@@ -300,6 +302,14 @@ Shader "Lereldarion/ExplorerCard" {
                 // Round corners. Inigo Quilez SDF strategy, L2 distance to inner rectangle.
                 if(length_sq(max(abs(centered_uv) - (quadrant_size - _Corner_Radius), 0)) > _Corner_Radius * _Corner_Radius) {
                      discard;
+                }
+
+                // Back of the card
+                if(!is_front_face) {
+                    // TODO improve this placeholder
+                    const float sd = msdf_sample(_Logo_Texture, centered_uv / _Logo_Back_Size + 0.5, _Logo_MSDF_Pixel_Range, _Logo_MSDF_Texture_Size);
+                    fixed3 color = lerp(0, _UI_Color.rgb, sdf_blend_with_aa(sd * _Logo_Back_Size, screenspace_scale_of_uv));
+                    return fixed4(color, 1);
                 }
 
                 // Outer box

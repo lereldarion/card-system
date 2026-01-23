@@ -24,6 +24,6 @@ TODO
 - MaterialPropertyDrawer load from texture.
 - MaterialPropertyDrawer : generate nice offset/scale based on font metrics
 - MaterialPropertyDrawer instant feedback ?
-- Back of the card
+- Back of the card (proper)
 - instanced version ? requires tex2D array + fixed instanced id. Ergonomy of the UI will be crap.
 - Package release when operational
