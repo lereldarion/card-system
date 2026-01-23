@@ -8,7 +8,7 @@
 //
 // Many properties are baked to constants now that the design is validated. The selectors are kept but commented out.
 
-Shader "Lereldarion/ExplorerCard" {
+Shader "Lereldarion/Card/Explorer" {
     Properties {
         [MainTexture] _Foreground_Texture("Avatar (alpha cutout)", 2D) = "" {}
         _Background_Texture("Background (no alpha)", 2D) = "" {}

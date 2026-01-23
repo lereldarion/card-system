@@ -234,6 +234,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             lines = new List<Line>();
             Dirty = false;
             this.font = font;
+            // TODO read from encoding if is exists
         }
 
         public void Add()
