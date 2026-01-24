@@ -237,7 +237,14 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         }
         public void Add()
         {
-            lines.Add(new Line());
+            Line line = new Line();
+            if (lines.Count > 0)
+            {
+                // Copy transform 1 line height lower for convenience
+                line.transform = lines.Last().transform;
+                line.NextLine(font);
+            }
+            lines.Add(line);
         }
         public void RemoveAt(int i)
         {
@@ -261,14 +268,28 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 
         public class Line
         {
-            public Vector4 transform = new Vector4(0, 0, 1, 0);
+            public Vector4 transform = new Vector4(0, 0, 1, 0); // Offset.xy, FontSize, Rotation(deg)
             public string text = "";
             public bool inverted = false;
 
             public bool representable = true;
-            public Vector2 Offset { get => transform; }
-            public float Size { get => transform.z; }
-            public float Rotation { get => transform.w; }
+
+            public Vector4 TransformToShaderFormat(Font font)
+            {
+                float scale = font.font_ascender_pixels / transform.z; // At size 1, 1uvy * scale = font_ascender_pixels.
+                float baseline_offset = -font.baseline_pixels / scale;
+                float rotation_radians = transform.w * Mathf.PI / 180f;
+                return new Vector4(
+                    transform.x, transform.y + baseline_offset,
+                    scale * Mathf.Cos(rotation_radians), scale * Mathf.Sin(rotation_radians));
+            }
+            public void NextLine(Font font)
+            {
+                float y_shift_uv = -transform.z * font.line_height_as_ascender_ratio;
+                float rotation_radians = transform.w * Mathf.PI / 180f;
+                transform.x -= y_shift_uv * Mathf.Sin(rotation_radians);
+                transform.y += y_shift_uv * Mathf.Cos(rotation_radians);
+            }
         }
     }
 
@@ -286,6 +307,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         public readonly Dictionary<char, float> whitespace_advance_px;
         public readonly float font_ascender_pixels;
         public readonly float baseline_pixels;
+        public readonly float line_height_as_ascender_ratio;
         public readonly Dictionary<(char, char), float> kerning_advance_px;
         public struct Glyph
         {
@@ -318,6 +340,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             // Glyph pixel info
             font_ascender_pixels = em_to_pixel.y * metrics.metrics.ascender;
             baseline_pixels = em_to_pixel.y * metrics.atlas.grid.originY;
+            line_height_as_ascender_ratio = metrics.metrics.lineHeight / metrics.metrics.ascender;
 
             glyphs = new Glyph[grid_dimensions.x * grid_dimensions.y];
             char_to_atlas_id = new Dictionary<char, uint>();
@@ -397,18 +420,10 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                     }
                 }
 
-                // Line transform
-                float scale = font_ascender_pixels / line.Size; // At size 1, 1uvy * scale = font_ascender_pixels.
-                float baseline_offset = -baseline_pixels / scale;
-                float rotation_radians = line.Rotation * Mathf.PI / 180f;
-                Vector4 transform = new Vector4(
-                    line.Offset.x, line.Offset.y + baseline_offset,
-                    scale * Mathf.Cos(rotation_radians), scale * Mathf.Sin(rotation_radians));
-
                 layouted_glyphs.Sort((l, r) => l.center_px.CompareTo(r.center_px));
                 return new LineWithLayout
                 {
-                    transform = transform,
+                    transform = line.TransformToShaderFormat(this),
                     inverted = line.inverted,
                     glyphs = layouted_glyphs,
                     width_px = current_x,
