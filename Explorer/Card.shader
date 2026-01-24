@@ -143,10 +143,15 @@ Shader "Lereldarion/Card/Explorer" {
             float length_sq(float2 v) { return dot(v, v); }
             float3 safe_normalize(float3 v) { return v * rsqrt(max(0.001f, dot(v, v))); }
             float2 pow2(float2 v) { return v * v; }
+            static const float f32_infinity = asfloat(0x3f800000);
             
             // Inigo Quilez https://iquilezles.org/articles/distfunctions2d/. Use negative for interior.
             float extrude_border_with_thickness(float sdf, float thickness) {
                 return abs(sdf) - thickness;
+            }
+            float psdf_box(float2 p, float2 b) {
+                const float2 d = abs(p) - b;
+                return max(d.x, d.y);
             }
             float psdf_chamfer_box(float2 p, float2 b, float chamfer) {
                 // Pseudo SDF, with sharp corners. Useful to keep sharp corners when thickness is added.
@@ -208,7 +213,7 @@ Shader "Lereldarion/Card/Explorer" {
                 const float2 atlas_pixel_to_uv = 1. / atlas_pixels;
                 
                 // Line handling
-                float sd = 100000; // Infinity
+                float sd = f32_infinity;
                 for(uint i = 0; i < line_count; i += 1) {
                     // Decode control pixel.
                     const uint4 control = asuint(encodings[uint2(0, i)]);
@@ -225,9 +230,8 @@ Shader "Lereldarion/Card/Explorer" {
                     const float2 line_px = mul(scale_rotation, uv - transform.xy);
 
                     // Text rectangle bounding box test.
-                    if(all(0 <= line_px && line_px <= float2(line_width_px, glyph_usable_pixels.y))) {
-                        // Scale for rescaling signed distance after sample. Sign of control_upper_r is inverted flag.
-                        const float inverse_scale = sign(control_upper_r) / length(transform.zw); // FIXME inverted impl is broken currently
+                    const float2 line_box_px = float2(line_width_px, glyph_usable_pixels.y);
+                    if(all(0 <= line_px && line_px <= line_box_px)) {
                         // Glyph array : packed 4 per pixel. Start at 1 to leave space for control.
                         uint glyph_array_start = 1;
                         uint glyph_array_end = 1 + (glyph_count - 1) / 4;
@@ -235,6 +239,7 @@ Shader "Lereldarion/Card/Explorer" {
                         // Start search at position if glyphs were of equal sizes.
                         const float line_x_ratio = line_px.x / line_width_px; // [0, 1]
                         uint glyph_array_index = 1 + uint(line_x_ratio * (glyph_array_end - glyph_array_start));
+                        float line_sd = f32_infinity;
                         while(true) {
                             // Decode pixel
                             uint4 pixel = asuint(encodings[uint2(glyph_array_index, i)]);
@@ -256,7 +261,7 @@ Shader "Lereldarion/Card/Explorer" {
                                     const float tex_sd = median(font_atlas.SampleLevel(sampler_clamp_bilinear, (glyph_px + atlas_offset_px) * atlas_pixel_to_uv, 0)) - 0.5;
                                     // tex_sd is in [-0.5, 0.5]. It represents texture pixel ranges between [-msdf_pixel_range, msdf_pixel_range], using the inverse SDF direction.
                                     const float tex_sd_pixel = -tex_sd * 2 * msdf_pixel_range;
-                                    sd = min(sd, tex_sd_pixel * inverse_scale);
+                                    line_sd = min(line_sd, tex_sd_pixel);
                                 }
                             }
 
@@ -273,9 +278,17 @@ Shader "Lereldarion/Card/Explorer" {
                                 glyph_array_start = glyph_array_index; // Prevent ping-pong
                                 continue;
                             }
-
                             break; // End search
                         }
+
+                        // Scale for rescaling signed distance after sample. Sign of control_upper_r is inverted flag.
+                        const float inverse_scale = sign(control_upper_r) / length(transform.zw);
+                        if(inverse_scale < 0) {
+                            // Inverted mode, apply bounding box to SDF to have anti-aliasing at the border.
+                            const float2 box_half_width = 0.5 * line_box_px;
+                            line_sd = min(line_sd, -psdf_box(line_px - box_half_width, box_half_width - 1));
+                        }
+                        sd = min(sd, inverse_scale * line_sd);
                     }
                 }
                 return sd;

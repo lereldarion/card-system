@@ -22,7 +22,6 @@ TODO
 
 # TODO
 - MaterialPropertyDrawer load from texture.
-- Fix invert impl
 - Back of the card (proper)
 - instanced version ? requires tex2D array + fixed instanced id. Ergonomy of the UI will be crap.
 - Package release when operational
