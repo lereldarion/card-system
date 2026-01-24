@@ -17,8 +17,9 @@ using System;
 //
 // _Text_Encoding_Texture texture asset (path/to/font_texture.<ext>) must have a companion path/to/font_texture.metrics.json with glyph metadata.
 //
-// Position is an offset in input UV.
+// Offset is in input UV.
 // Size is set so that 1 input UV.y unit goes from font baseline to ascender height (https://en.wikipedia.org/wiki/Typeface#Font_metrics).
+// Rotation is in degrees.
 // Shader-side, a signed distance function at input UV scale is returned, with negative = interior of characters.
 public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 {
@@ -403,6 +404,8 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 Vector4 transform = new Vector4(
                     line.Offset.x, line.Offset.y + baseline_offset,
                     scale * Mathf.Cos(rotation_radians), scale * Mathf.Sin(rotation_radians));
+
+                layouted_glyphs.Sort((l, r) => l.center_px.CompareTo(r.center_px));
                 return new LineWithLayout
                 {
                     transform = transform,
@@ -447,11 +450,11 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                         | (glyph.atlas_id << (bits_center + bits_width));
                 }
 
-                // Repeat glyph data  to ensure last pixel has values for RGBA.
+                // Padding with zero width glyph.
                 // Simplifies shader code, avoids handling a partial pixel.
                 int last_glyph = offset - 1;
                 int end_of_pixel = 4 * ((offset + 3) / 4);
-                for (; offset < end_of_pixel; offset += 1) { buffer[offset] = buffer[last_glyph]; }
+                for (; offset < end_of_pixel; offset += 1) { buffer[offset] = 0; }
             }
             for (int i = layouted_lines.Length; i < encodings.height; i += 1)
             {

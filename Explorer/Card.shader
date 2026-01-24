@@ -188,6 +188,7 @@ Shader "Lereldarion/Card/Explorer" {
             }
 
             float sdf_lereldarion_text_lines(float2 uv, Texture2D<float3> font_atlas, float4 font_config, Texture2D<float4> encodings, uint line_count) {
+                // Prepare constants
                 const uint bits_atlas_id = 12; const uint bits_atlas_id_mask = (1u << bits_atlas_id) - 1u;
                 const uint bits_width = 8; const uint bits_width_mask = (1u << bits_width) - 1u;
                 const uint bits_center = 32 - (bits_atlas_id + bits_width); const uint bits_center_mask = (1u << bits_center) - 1u;
@@ -197,14 +198,16 @@ Shader "Lereldarion/Card/Explorer" {
                 line_count = min(line_count, encodings_pixels.y); // Clamp line_count in case it is broken
 
                 const float2 glyph_cell_pixels = font_config.xy;
-                const float2 glyph_usable_pixels = glyph_cell_pixels - 1; // Index from pixel center to pixel center, avoid edges.
                 const uint glyph_columns = (uint) font_config.z;
                 const float msdf_pixel_range = font_config.w;
+                const float2 glyph_usable_pixels = glyph_cell_pixels - 1; // Index from pixel center to pixel center, avoid edges.
+                const float half_glyph_max_width = 0.5 * glyph_usable_pixels.x;
                 
                 float2 atlas_pixels;
                 font_atlas.GetDimensions(atlas_pixels.x, atlas_pixels.y);
                 const float2 atlas_pixel_to_uv = 1. / atlas_pixels;
                 
+                // Line handling
                 float sd = 100000; // Infinity
                 for(uint i = 0; i < line_count; i += 1) {
                     // Decode control pixel.
@@ -237,46 +240,41 @@ Shader "Lereldarion/Card/Explorer" {
                             uint4 pixel = asuint(encodings[uint2(glyph_array_index, i)]);
                             const float4 centers = float4(pixel & bits_center_mask) / float(bits_center_mask) * line_width_px;
                             pixel = pixel >> bits_center;
-                            const float4 half_advances = 0.5 * float4(pixel & bits_width_mask) / float(bits_width_mask) * glyph_usable_pixels.x;
+                            const float4 half_widths = 0.5 * float4(pixel & bits_width_mask) / float(bits_width_mask) * glyph_usable_pixels.x;
                             const uint4 atlas_ids = pixel >> bits_width;
 
+                            // Check all glyphs of the current pixel. In practice only 1 or 2 should be in range at a time.
                             const float4 glyph_x_px_centereds = line_px.x - centers;
+                            const bool4 within_glyph = abs(glyph_x_px_centereds) < half_widths;
+                            [unroll] for(uint j = 0; j < 4; j += 1) {
+                                if(within_glyph[j]) {
+                                    const uint atlas_id = atlas_ids[j];
+                                    const float2 glyph_px = float2(glyph_x_px_centereds[j] + 0.5 * glyph_usable_pixels.x, line_px.y);
+                                    const uint atlas_row = atlas_id / glyph_columns;
+                                    const uint atlas_column = atlas_id - atlas_row * glyph_columns;
+                                    const float2 atlas_offset_px = float2(atlas_column * glyph_cell_pixels.x, atlas_pixels.y - glyph_cell_pixels.y * (atlas_row + 1)) + 0.5;
+                                    const float tex_sd = median(font_atlas.SampleLevel(sampler_clamp_bilinear, (glyph_px + atlas_offset_px) * atlas_pixel_to_uv, 0)) - 0.5;
+                                    // tex_sd is in [-0.5, 0.5]. It represents texture pixel ranges between [-msdf_pixel_range, msdf_pixel_range], using the inverse SDF direction.
+                                    const float tex_sd_pixel = -tex_sd * 2 * msdf_pixel_range;
+                                    sd = min(sd, tex_sd_pixel * inverse_scale);
+                                }
+                            }
 
-                            // If line_px is not contained within the 4 glyphs of this pixel, do linear search
-                            if(glyph_x_px_centereds[0] < -half_advances[0] && glyph_array_index > glyph_array_start) {
+                            // line_px may not contained within the 4 glyphs of this pixel.
+                            // Perform a linear search, but only in one direction.
+                            // Criterion : if line_x < center[0] + 0.5 max_width, there may be other overlapping glyphs on the left. Same on the right.
+                            if(glyph_x_px_centereds[0] < half_glyph_max_width && glyph_array_index > glyph_array_start) {
                                 glyph_array_index -= 1;
                                 glyph_array_end = glyph_array_index; // Prevent ping-pong
                                 continue;
                             }
-                            if(glyph_x_px_centereds[3] > half_advances[3] && glyph_array_index < glyph_array_end) {
+                            if(glyph_x_px_centereds[3] > -half_glyph_max_width && glyph_array_index < glyph_array_end) {
                                 glyph_array_index += 1;
                                 glyph_array_start = glyph_array_index; // Prevent ping-pong
                                 continue;
                             }
 
-                            // line_px is in one of the 4 glyphs of this pixel, or out of bounds.
-                            // search among the 4. unrolled to a sequence of movc
-                            uint atlas_id = bits_atlas_id_mask + 1;
-                            float glyph_x_px_centered = 0;
-                            bool4 within_glyph = abs(glyph_x_px_centereds) < half_advances;
-                            [unroll] for(uint j = 0; j < 4; j += 1) {
-                                if(within_glyph[j]) {
-                                    atlas_id = atlas_ids[j];
-                                    glyph_x_px_centered = glyph_x_px_centereds[j];
-                                }
-                            }
-
-                            if(atlas_id <= bits_atlas_id_mask) {
-                                float2 glyph_px = float2(glyph_x_px_centered + 0.5 * glyph_usable_pixels.x, line_px.y);
-                                const uint atlas_row = atlas_id / glyph_columns;
-                                const uint atlas_column = atlas_id - atlas_row * glyph_columns;
-                                const float2 atlas_offset_px = float2(atlas_column * glyph_cell_pixels.x, atlas_pixels.y - glyph_cell_pixels.y * (atlas_row + 1)) + 0.5;
-                                const float tex_sd = median(font_atlas.SampleLevel(sampler_clamp_bilinear, (glyph_px + atlas_offset_px) * atlas_pixel_to_uv, 0)) - 0.5;
-                                // tex_sd is in [-0.5, 0.5]. It represents texture pixel ranges between [-msdf_pixel_range, msdf_pixel_range], using the inverse SDF direction.
-                                const float tex_sd_pixel = -tex_sd * 2 * msdf_pixel_range;
-                                sd = min(sd, tex_sd_pixel * inverse_scale);
-                            }
-                            break;
+                            break; // End search
                         }
                     }
                 }
