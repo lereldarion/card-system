@@ -130,7 +130,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_height);
         GUIStyle style_label_centered = new GUIStyle(EditorStyles.label); style_label_centered.alignment = TextAnchor.MiddleCenter;
         GUIStyle invalid_text_field = StyleWithRedText(EditorStyles.textField);
-        float numeric_field_width = 4f * line_height;
+        float numeric_field_width = 4.5f * line_height;
 
         // Section folding
         gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, label);
@@ -280,6 +280,15 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 return new Vector4(
                     transform.x, transform.y + baseline_offset,
                     scale * Mathf.Cos(rotation_radians), scale * Mathf.Sin(rotation_radians));
+            }
+            public void SetTransformFromShaderFormat(Vector4 shader_transform, Font font)
+            {
+                float scale = new Vector2(shader_transform.z, shader_transform.w).magnitude;
+                transform.z = font.font_ascender_pixels / scale;
+                transform.x = shader_transform.x;
+                float baseline_offset = -font.baseline_pixels / scale;
+                transform.y = shader_transform.y - baseline_offset;
+                transform.w = Mathf.Atan2(shader_transform.w, shader_transform.z) * 180f / Mathf.PI;
             }
             public void NextLine(Font font)
             {
@@ -441,10 +450,10 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 
             // Texture encoding. R32G32B32A32_UInt so use f32x4 and bitcast using load only. Stupid...
             Texture2D encodings = new Texture2D(encoding_resolution, Mathf.NextPowerOfTwo(layouted_lines.Length), GraphicsFormat.R32G32B32A32_SFloat, 1, TextureCreationFlags.None);
-            var encoding_pixels = encodings.GetRawTextureData<uint>();
+            NativeArray<uint> encoding_pixels = encodings.GetRawTextureData<uint>();
             for (int i = 0; i < layouted_lines.Length; i += 1)
             {
-                var line_pixels = encoding_pixels.Slice(4 * encodings.width * i, 4 * encodings.width);
+                NativeSlice<uint> line_pixels = encoding_pixels.Slice(4 * encodings.width * i, 4 * encodings.width);
                 LineWithLayout line = layouted_lines[i];
                 // Control pixel.
                 line_pixels[0] = ((uint)Mathf.FloatToHalf(line.transform.x)) | (((uint)Mathf.FloatToHalf(line.width_px * (line.inverted ? -1 : 1))) << 16);
@@ -463,13 +472,13 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 }
 
                 // Padding with zero width glyph. Simplifies shader code, avoids handling a partial pixel.
-                var tail = line_pixels.Slice(offset);
+                NativeSlice<uint> tail = line_pixels.Slice(offset);
                 for (int j = 0; j < tail.Length; j += 1) { tail[j] = 0; }
             }
             for (int i = layouted_lines.Length; i < encodings.height; i += 1)
             {
                 // Fill padding line config pixels with dummy values in case line_count variable is broken
-                var line_pixels = encoding_pixels.Slice(4 * encodings.width * i, 4 * encodings.width);
+                NativeSlice<uint> line_pixels = encoding_pixels.Slice(4 * encodings.width * i, 4 * encodings.width);
                 for (int j = 0; j < 4; j += 1) { line_pixels[j] = 0; }
 
             }
@@ -478,7 +487,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         }
         private struct LineWithLayout
         {
-            public Vector4 transform;
+            public Vector4 transform; // in shader format
             public bool inverted;
             public List<Glyph> glyphs;
             public float width_px;
@@ -496,13 +505,31 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 
             if (!(encodings is Texture2D && encodings.graphicsFormat == GraphicsFormat.R32G32B32A32_SFloat)) { throw new Exception("Bad text encoding texture format"); }
 
-            var encoding_pixels = ((Texture2D)encodings).GetRawTextureData<uint>();
+            NativeArray<uint> encoding_pixels = ((Texture2D)encodings).GetRawTextureData<uint>();
             for (int i = 0; i < encodings.height; i += 1)
             {
-                var line_pixels = encoding_pixels.Slice(4 * encodings.width * i, 4 * encodings.width);
+                NativeSlice<uint> line_pixels = encoding_pixels.Slice(4 * encodings.width * i, 4 * encodings.width);
                 if (line_pixels.Take(4).All(value => value == 0)) { break; } // Early end control pixel
+                LineWithLayout layouted_line = new LineWithLayout();
 
-                // TODO read chars
+                // Control pixel
+                layouted_line.transform.x = Mathf.HalfToFloat((ushort)line_pixels[0]);
+                layouted_line.transform.y = Mathf.HalfToFloat((ushort)line_pixels[1]);
+                layouted_line.transform.z = Mathf.HalfToFloat((ushort)line_pixels[2]);
+                layouted_line.transform.w = Mathf.HalfToFloat((ushort)line_pixels[3]);
+                float line_width_px = Mathf.HalfToFloat((ushort)(line_pixels[0] >> 16));
+                layouted_line.inverted = line_width_px < 0;
+                line_width_px = Mathf.Abs(line_width_px);
+                uint glyph_count = line_pixels[1] >> 16;
+
+                // TODO read chars. Track advance and add spaces in gaps.
+                char previous_c = (char)0;
+
+                // Reconstructed line
+                var line = new LineCache.Line();
+                line.SetTransformFromShaderFormat(layouted_line.transform, this);
+                line.inverted = layouted_line.inverted;
+                line_cache.lines.Add(line);
             }
             return line_cache;
         }

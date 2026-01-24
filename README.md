@@ -21,7 +21,7 @@ TODO
 - A custom `MaterialPropertyDrawer` enables ergonomic edition of the text line texture.
 
 # TODO
-- MaterialPropertyDrawer load from texture.
+- MaterialPropertyDrawer load from texture : finish reconstructing text
 - Back of the card (proper)
 - Change line order with buttons ? May be annoying if text focus does not like it
 - Package release when operational
