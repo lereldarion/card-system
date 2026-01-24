@@ -25,6 +25,7 @@ TODO
 - Back of the card (proper)
 - Change line order with buttons ? May be annoying if text focus does not like it
 - Package release when operational
+- Some space left in line control pixel for storing config : boldness, color ?
 
 Make an instanced version of the shader for deck/collection of cards ?
 - Requires tex2D array + fixed instanced id. Textures cannot be instanced.
