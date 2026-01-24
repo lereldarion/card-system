@@ -227,7 +227,7 @@ Shader "Lereldarion/Card/Explorer" {
                     // Text rectangle bounding box test.
                     if(all(0 <= line_px && line_px <= float2(line_width_px, glyph_usable_pixels.y))) {
                         // Scale for rescaling signed distance after sample. Sign of control_upper_r is inverted flag.
-                        const float inverse_scale = sign(control_upper_r) / length(transform.zw);
+                        const float inverse_scale = sign(control_upper_r) / length(transform.zw); // FIXME inverted impl is broken currently
                         // Glyph array : packed 4 per pixel. Start at 1 to leave space for control.
                         uint glyph_array_start = 1;
                         uint glyph_array_end = 1 + (glyph_count - 1) / 4;

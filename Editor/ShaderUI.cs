@@ -313,7 +313,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             // Scan glyphs to find the first with EM size data to use as model, as all glyphs share the same in uniform grid mode.
             Vector2 glyph_em_size = metrics.glyphs.Select(glyph => glyph.planeBounds.Size()).First(size => size != Vector2.zero);
             Vector2 em_to_pixel = ((Vector2)grid_cell_usable_pixels) / glyph_em_size;
-            float convert_to_advance_unorm = ((1u << bits_width) - 1u) / glyph_em_size.x;
+            UNormConverter width_converter = new UNormConverter(bits_width, glyph_em_size.x);
 
             // Glyph pixel info
             font_ascender_pixels = em_to_pixel.y * metrics.metrics.ascender;
@@ -348,7 +348,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                         character = character,
                         advance_px = em_to_pixel.x * glyph.advance,
                         center_px = em_to_pixel.x * glyph_em_center,
-                        width_unorm = (uint)Mathf.RoundToInt(convert_to_advance_unorm * centered_width),
+                        width_unorm = width_converter.ToUNorm(centered_width),
                     };
                     char_to_atlas_id.Add(character, (uint)atlas_id);
                 }
@@ -442,10 +442,10 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 offset += 4;
 
                 // Encode glyphs
-                float convert_to_center_unorm = ((1u << bits_center) - 1u) / line.width_px;
+                UNormConverter center_converter = new UNormConverter(bits_center, line.width_px);
                 foreach (var glyph in line.glyphs)
                 {
-                    buffer[offset++] = ((uint)Mathf.RoundToInt(convert_to_center_unorm * glyph.center_px))
+                    buffer[offset++] = center_converter.ToUNorm(glyph.center_px)
                         | (glyphs[glyph.atlas_id].width_unorm << bits_center)
                         | (glyph.atlas_id << (bits_center + bits_width));
                 }
@@ -566,5 +566,21 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         style.onHover.textColor = Color.red;
         style.onNormal.textColor = Color.red;
         return style;
+    }
+
+    private class UNormConverter
+    {
+        private float range;
+        private float conversion_factor;
+        public UNormConverter(int bits, float range)
+        {
+            conversion_factor = ((1 << bits) - 1) / range;
+            this.range = range;
+        }
+        public uint ToUNorm(float v)
+        {
+            v = Mathf.Clamp(v, 0, range);
+            return (uint)Mathf.RoundToInt(v * conversion_factor);
+        }
     }
 }
