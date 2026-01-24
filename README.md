@@ -23,5 +23,13 @@ TODO
 # TODO
 - MaterialPropertyDrawer load from texture.
 - Back of the card (proper)
-- instanced version ? requires tex2D array + fixed instanced id. Ergonomy of the UI will be crap.
+- Change line order with buttons ? May be annoying if text focus does not like it
 - Package release when operational
+
+Make an instanced version of the shader for deck/collection of cards ?
+- Requires tex2D array + fixed instanced id. Textures cannot be instanced.
+- Resolution of all instanced textures must be fixed. Foreground, background, text encodings.
+- UI ergonomy is a hard problem.
+    - Conversion requires all renderers at once to build the tex2Darray, and set fixed instance id. Keep the old materials around afterward, even if unused ?
+    - Editing a specific card, un-merging, or adding a card is difficult.
+    - Likely waste of memory if number of slices (instances, cards) of the texture must be power of 2
