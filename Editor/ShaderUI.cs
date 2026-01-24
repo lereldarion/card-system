@@ -168,7 +168,10 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             // Manage asset database. Try to keep the asset_path cached even if temporarily deleted.
             if (encoding_texture is null)
             {
-                if (AssetDatabase.Contains(current_encoding_texture)) { AssetDatabase.DeleteAsset(current_encoding_texture_asset_path); }
+                if (current_encoding_texture is not null && AssetDatabase.Contains(current_encoding_texture))
+                {
+                    AssetDatabase.DeleteAsset(current_encoding_texture_asset_path);
+                }
             }
             else
             {
