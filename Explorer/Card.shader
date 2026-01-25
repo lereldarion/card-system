@@ -108,7 +108,7 @@ Shader "Lereldarion/Card/Explorer" {
         float3 safe_normalize(float3 v) { return v * rsqrt(max(0.001f, dot(v, v))); }
         float2 pow2(float2 v) { return v * v; }
         static const float f32_infinity = asfloat(0x3f800000);
-        
+
         ENDCG
 
         Pass {
@@ -406,6 +406,8 @@ Shader "Lereldarion/Card/Explorer" {
             Tags { "LightMode" = "ShadowCaster" }
 
             CGPROGRAM
+            #pragma multi_compile_shadowcaster
+            
             #pragma vertex vertex_stage
             #pragma fragment fragment_stage
 
