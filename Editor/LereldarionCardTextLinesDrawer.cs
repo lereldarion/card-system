@@ -12,9 +12,9 @@ using Unity.Collections;
 //
 // Usage : tag a set of properties that encode text.
 // [LereldarionCardTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
-// _Text_LineCount("Text line count", Integer) = 0
-// _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
-// _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
+// [HideInInspector] _Text_LineCount("Text line count", Integer) = 0 // Auto-generated text metadata
+// [NoScaleOffset] _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {} // Font choice
+// [HideInInspector] _Font_MSDF_Atlas_Config("Font config", Vector) = (0, 0, 0, 0) // Auto-generated font metadata
 //
 // _Text_Encoding_Texture texture asset (path/to/font_texture.<ext>) must have a companion path/to/font_texture.metrics.json with glyph metadata.
 //
@@ -398,8 +398,9 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         // Encode lines in a texture. Returns (texture, line_count). line_count == 0 => texture = null.
         // RGBA u32 texture, line per line.
         // First column is a control pixel for each line :
-        // - RG[0..16] = f16 offset, R[16..32] = f16 scaling
-        // - B[0..16] = f16 width_px, B[16..32] = u16 glyph count
+        // - RGBA[0..16] = f16 transform (offset, scaled rotation matrix coeffs)
+        // - R[16..32] = f16 width_px, sign='-' if text inverted
+        // - G[16..32] = u16 glyph count
         // Next pixels in the line : glyphs pixels, 4 by 4. (R->G->B->A)->(R->G->B->A) etc. Last one may have the last glyph repeated to pad.
         // Each pixel bit-encodes (atlas_id, width, center_x), the last 2 as Unorm ratios of respectively glyph_width and line_width.
         private const int bits_atlas_id = 12;

@@ -146,6 +146,7 @@ Shader "Lereldarion/Card/Explorer" {
             static const float f32_infinity = asfloat(0x3f800000);
             
             // Inigo Quilez https://iquilezles.org/articles/distfunctions2d/. Use negative for interior.
+            // "psdf" = Pseudo SDF, with sharp corners. Useful to keep sharp corners when thickness is added.
             float extrude_border_with_thickness(float sdf, float thickness) {
                 return abs(sdf) - thickness;
             }
@@ -154,7 +155,6 @@ Shader "Lereldarion/Card/Explorer" {
                 return max(d.x, d.y);
             }
             float psdf_chamfer_box(float2 p, float2 b, float chamfer) {
-                // Pseudo SDF, with sharp corners. Useful to keep sharp corners when thickness is added.
                 const float2 d = abs(p) - b;
                 const float rectangle_sd = max(d.x, d.y);
                 const float chamfer_sd = sqrt(0.5) * (d.x + d.y + chamfer);
@@ -226,8 +226,8 @@ Shader "Lereldarion/Card/Explorer" {
 
                     // Apply 2D transform to convert to line referential, in glyph pixel units.
                     // transform=(offset.xy, scale_cos, scale_sin)
-                    const float2x2 scale_rotation = float2x2(transform.z, transform.w, -transform.w, transform.z);
-                    const float2 line_px = mul(scale_rotation, uv - transform.xy);
+                    const float2x2 scaled_rotation_matrix = float2x2(transform.z, transform.w, -transform.w, transform.z);
+                    const float2 line_px = mul(scaled_rotation_matrix, uv - transform.xy);
 
                     // Text rectangle bounding box test.
                     const float2 line_box_px = float2(line_width_px, glyph_usable_pixels.y);
@@ -320,7 +320,7 @@ Shader "Lereldarion/Card/Explorer" {
 
                 // Back of the card
                 if(!is_front_face) {
-                    // TODO improve this placeholder
+                    // TODO improve this placeholder. https://www.shadertoy.com/view/w33GRl ? cheaper https://www.shadertoy.com/view/WdyXDR ?
                     const float sd = msdf_sample(_Logo_Texture, centered_uv / _Logo_Back_Size + 0.5, _Logo_MSDF_Pixel_Range, _Logo_MSDF_Texture_Size);
                     fixed3 color = lerp(0, _UI_Color.rgb, sdf_blend_with_aa(sd * _Logo_Back_Size, screenspace_scale_of_uv));
                     return fixed4(color, 1);
