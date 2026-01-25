@@ -69,7 +69,6 @@ If your font kerning is not working, the solution is to open the font with [font
 Check if the generated `metrics.json` contains a non empty `kernings` JSON field.
 
 # TODO
-- Shadowcaster
 - Drawer : one drawer instance per **shader**. Fixme state by material
 - MaterialPropertyDrawer load from texture : finish reconstructing text
 - Back of the card (proper) : one of 2 vortex shadertoys ; beware of cost

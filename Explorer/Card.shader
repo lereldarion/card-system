@@ -55,23 +55,72 @@ Shader "Lereldarion/Card/Explorer" {
             "VRCFallback" = "Unlit"
         }
 
+        CGINCLUDE
+        #pragma warning (error : 3205) // implicit precision loss
+        #pragma warning (error : 3206) // implicit truncation
+
+        #pragma target 5.0
+        #pragma multi_compile_instancing
+
+        #include "UnityCG.cginc"
+
+        // Common hardcoded sampler. Set by keywords in name https://docs.unity3d.com/Manual/SL-SamplerStates.html
+        uniform SamplerState sampler_clamp_bilinear;
+        
+        uniform Texture2D<fixed4> _Foreground_Texture;
+        uniform SamplerState sampler_Foreground_Texture;
+        uniform float4 _Foreground_Texture_ST;
+        uniform Texture2D<fixed3> _Background_Texture;
+        uniform SamplerState sampler_Background_Texture;
+        uniform float4 _Background_Texture_ST;
+        uniform float _Avatar_Parallax_Depth;
+        uniform float _Background_Parallax_Depth;
+
+        static const float _Aspect_Ratio = 0.707;
+        static const float _Corner_Radius = 0.024;
+        
+        uniform fixed4 _UI_Color;
+        static const float _UI_Common_Margin = 0.03;
+        static const float _UI_Border_Thickness = 0.0015;
+        static const float _UI_Outer_Border_Chamfer = 0.04;
+        static const float _UI_Title_Height = 0.036;
+        static const float _UI_Title_Chamfer = 0.023;
+        static const float _UI_Description_Height = 0.15;
+        static const float _UI_Description_Chamfer = 0.034;
+
+        static const float _Blur_Mip_Bias = 2;
+        static const float _Blur_Darken = 0.3;
+
+        uniform Texture2D<float3> _Logo_Texture;
+        uniform fixed4 _Logo_Color;
+        static const float4 _Logo_Rotation_Scale_Offset = float4(23, 0.41, 0.19, -0.097);
+        static const float _Logo_MSDF_Pixel_Range = 8;
+        static const float _Logo_MSDF_Texture_Size = 128;
+        uniform float _Logo_Back_Size;
+
+        uniform Texture2D<float4> _Text_Encoding_Texture; // uint4 but must use float4 due to unity refusing to create a u32x4 texture. Bitcast !
+        uniform uint _Text_LineCount;
+        uniform Texture2D<float3> _Font_MSDF_Atlas_Texture;
+        uniform float4 _Font_MSDF_Atlas_Config; // (glyph_pixels.xy, atlas_columns, msdf_pixel_range)
+
+        // Utils
+        float length_sq(float2 v) { return dot(v, v); }
+        float3 safe_normalize(float3 v) { return v * rsqrt(max(0.001f, dot(v, v))); }
+        float2 pow2(float2 v) { return v * v; }
+        static const float f32_infinity = asfloat(0x3f800000);
+        
+        ENDCG
+
         Pass {
             Cull Off
             ZTest LEqual
             ZWrite On
             Blend Off
+            Tags { "LightMode" = "ForwardBase" }
 
             CGPROGRAM
-            #pragma warning (error : 3205) // implicit precision loss
-            #pragma warning (error : 3206) // implicit truncation
-
-            #pragma target 5.0
-            #pragma multi_compile_instancing
-
             #pragma vertex vertex_stage
             #pragma fragment fragment_stage
-
-            #include "UnityCG.cginc"
 
             struct VertexData {
                 float3 position : POSITION;
@@ -90,45 +139,6 @@ Shader "Lereldarion/Card/Explorer" {
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            // Common hardcoded sampler. Set by keywords in name https://docs.unity3d.com/Manual/SL-SamplerStates.html
-            uniform SamplerState sampler_clamp_bilinear;
-            
-            uniform Texture2D<fixed4> _Foreground_Texture;
-            uniform SamplerState sampler_Foreground_Texture;
-            uniform float4 _Foreground_Texture_ST;
-            uniform Texture2D<fixed3> _Background_Texture;
-            uniform SamplerState sampler_Background_Texture;
-            uniform float4 _Background_Texture_ST;
-            uniform float _Avatar_Parallax_Depth;
-            uniform float _Background_Parallax_Depth;
-
-            static const float _Aspect_Ratio = 0.707;
-            static const float _Corner_Radius = 0.024;
-            
-            uniform fixed4 _UI_Color;
-            static const float _UI_Common_Margin = 0.03;
-            static const float _UI_Border_Thickness = 0.0015;
-            static const float _UI_Outer_Border_Chamfer = 0.04;
-            static const float _UI_Title_Height = 0.036;
-            static const float _UI_Title_Chamfer = 0.023;
-            static const float _UI_Description_Height = 0.15;
-            static const float _UI_Description_Chamfer = 0.034;
-
-            static const float _Blur_Mip_Bias = 2;
-            static const float _Blur_Darken = 0.3;
-
-            uniform Texture2D<float3> _Logo_Texture;
-            uniform fixed4 _Logo_Color;
-            static const float4 _Logo_Rotation_Scale_Offset = float4(23, 0.41, 0.19, -0.097);
-            static const float _Logo_MSDF_Pixel_Range = 8;
-            static const float _Logo_MSDF_Texture_Size = 128;
-            uniform float _Logo_Back_Size;
-
-            uniform Texture2D<float4> _Text_Encoding_Texture; // uint4 but must use float4 due to unity refusing to create a u32x4 texture. Bitcast !
-            uniform uint _Text_LineCount;
-            uniform Texture2D<float3> _Font_MSDF_Atlas_Texture;
-            uniform float4 _Font_MSDF_Atlas_Config; // (glyph_pixels.xy, atlas_columns, msdf_pixel_range)
-
             void vertex_stage(VertexData input, out FragmentInput output) {
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
@@ -139,11 +149,6 @@ Shader "Lereldarion/Card/Explorer" {
                 output.tangent_ws.w = input.tangent.w * unity_WorldTransformParams.w;
                 output.uv0 = input.uv0;
             }
-
-            float length_sq(float2 v) { return dot(v, v); }
-            float3 safe_normalize(float3 v) { return v * rsqrt(max(0.001f, dot(v, v))); }
-            float2 pow2(float2 v) { return v * v; }
-            static const float f32_infinity = asfloat(0x3f800000);
             
             // Inigo Quilez https://iquilezles.org/articles/distfunctions2d/. Use negative for interior.
             // "psdf" = Pseudo SDF, with sharp corners. Useful to keep sharp corners when thickness is added.
@@ -395,6 +400,52 @@ Shader "Lereldarion/Card/Explorer" {
                 return fixed4(color, 1);
             }
             ENDCG            
+        }
+
+        Pass {
+            Tags { "LightMode" = "ShadowCaster" }
+
+            CGPROGRAM
+            #pragma vertex vertex_stage
+            #pragma fragment fragment_stage
+
+            struct VertexData {
+                float3 vertex : POSITION;
+                float3 normal : NORMAL;
+                float2 uv0 : TEXCOORD0;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct FragmentInput {
+                V2F_SHADOW_CASTER;
+                float2 uv0 : UV0;
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            void vertex_stage(VertexData v, out FragmentInput o) {
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+                TRANSFER_SHADOW_CASTER_NORMALOFFSET(o);
+                o.uv0 = v.uv0;
+            }
+
+            fixed4 fragment_stage(FragmentInput input) : SV_Target {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+
+                // UVs.
+                const float2 raw_uv_range = float2(_Aspect_Ratio, 1);
+                const float2 quadrant_size = 0.5 * raw_uv_range;
+                const float2 centered_uv = input.uv0 - quadrant_size; // [-AR/2, AR/2] x [-0.5, 0.5]
+
+                // Round corners. Inigo Quilez SDF strategy, L2 distance to inner rectangle.
+                if(length_sq(max(abs(centered_uv) - (quadrant_size - _Corner_Radius), 0)) > _Corner_Radius * _Corner_Radius) {
+                     discard;
+                }
+
+                SHADOW_CASTER_FRAGMENT(input)
+            }
+
+            ENDCG
         }
     }
 }
