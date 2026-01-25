@@ -153,15 +153,24 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         Rect gui_line_text = new Rect(gui_line_inverted.xMax + 1, gui_full_line.y, gui_full_line.xMax - gui_line_inverted.xMax, line_height);
 
         // Header line
-        if (GUI.Button(gui_list_button, "+")) { line_cache.AddLine(font); }
-        EditorGUI.LabelField(new Rect(gui_line_transform.x, gui_line_transform.y, 2 * numeric_field_width, line_height), "Offset", style_label_centered);
-        EditorGUI.LabelField(new Rect(gui_line_transform.x + 2 * numeric_field_width, gui_line_transform.y, numeric_field_width, line_height), "Size", style_label_centered);
-        EditorGUI.LabelField(new Rect(gui_line_transform.x + 3 * numeric_field_width, gui_line_transform.y, numeric_field_width, line_height), "Rotation", style_label_centered);
-        EditorGUI.LabelField(gui_line_inverted, "◙", style_label_centered);
-        EditorGUI.LabelField(gui_line_text, "Text", style_label_centered);
+        if (GUI.Button(gui_list_button, new GUIContent("+", "New line"))) { line_cache.AddLine(font); }
+        EditorGUI.LabelField(
+            new Rect(gui_line_transform.x, gui_line_transform.y, 2 * numeric_field_width, line_height),
+            new GUIContent("Offset", "Offset in UV units"), style_label_centered);
+        EditorGUI.LabelField(
+            new Rect(gui_line_transform.x + 2 * numeric_field_width, gui_line_transform.y, numeric_field_width, line_height),
+            new GUIContent("Size", "Font size, 1 = 1 vertical UV unit"), style_label_centered);
+        EditorGUI.LabelField(
+            new Rect(gui_line_transform.x + 3 * numeric_field_width, gui_line_transform.y, numeric_field_width, line_height),
+            new GUIContent("Rotation", "Rotate text around bottom-left corner (degrees)"), style_label_centered);
+        EditorGUI.LabelField(gui_line_inverted, new GUIContent("◙", "Make inverted text (box with character glyph holes)"), style_label_centered);
+        EditorGUI.LabelField(gui_line_text, new GUIContent("Text", "Line turns red if it contains characters not supported by the font"), style_label_centered);
 
         GUIStyle save_button_style = line_cache.AllRepresentable() ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
-        if (GUI.Button(new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Save", save_button_style) && line_cache.AllRepresentable())
+        bool gui_save_button = GUI.Button(
+            new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height),
+            new GUIContent("Save", "Write current text lines to encodings texture"), save_button_style);
+        if (gui_save_button && line_cache.AllRepresentable())
         {
             var (encoding_texture, line_count) = font.EncodeLines(line_cache);
 
@@ -188,7 +197,11 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 
             current_encoding_texture = encoding_texture;
         }
-        if (GUI.Button(new Rect(gui_line_text.x + 0.8f * gui_line_text.width, gui_full_line.y, 0.2f * gui_line_text.width, line_height), "Reload"))
+
+        bool gui_reload_button = GUI.Button(
+            new Rect(gui_line_text.x + 0.8f * gui_line_text.width, gui_full_line.y, 0.2f * gui_line_text.width, line_height),
+            new GUIContent("Reload", "Discard changes and reload lines from encodings texture"));
+        if (gui_reload_button)
         {
             line_cache = font.DecodeLines(current_encoding_texture);
         }
@@ -200,7 +213,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             gui_line_transform.y += line_spacing;
             gui_line_inverted.y += line_spacing;
             gui_line_text.y += line_spacing;
-            if (GUI.Button(gui_list_button, "x"))
+            if (GUI.Button(gui_list_button, new GUIContent("x", "Delete line")))
             {
                 line_cache.RemoveLine(i);
                 i -= 1; // Fix iteration count

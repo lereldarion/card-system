@@ -53,6 +53,7 @@ The explorer card uses Orbitron, and was generated using this command :
 ./msdf-atlas-gen.exe -font Orbitron-Regular.ttf -charset charset.txt -imageout orbitron.png -json orbitron.metrics.json -potr -uniformgrid
 ```
 
+You can generate your own font and use it with the system
 - You must select a charset ahead of time, see the charset selection options provided by `msdf-atlas-gen`.
 - The text system supports both square and rectangle textures (`-potr`)
 - `msdf-atlas-gen` defaults for other options work well in my experience : texture size selection, and texture SDF range (default = 2px)
@@ -60,19 +61,22 @@ The explorer card uses Orbitron, and was generated using this command :
 - It is recommended to reuse the same font texture across multiple materials, to share the VRAM. Text encodings are tiny.
 - The text encoding texture does not store the exact text line strings, but encodings of them. Some consequences :
     - Changing the font of a material will prevent correct loading of already encoded text.
-    - Having multiple whitespace in a charset may confuse the decoder, as it must deduce spaces fron glyph spacing.
+    - Having multiple whitespace in a charset may confuse the decoder, as it must deduce spaces from glyph spacing.
 
 The text system supports fonts with [kerning](https://en.wikipedia.org/wiki/Kerning).
 However `msdf-atlas-gen` only supports older kerning data format (https://github.com/Chlumsky/msdf-atlas-gen/issues/4).
 If your font kerning is not working, the solution is to open the font with [fontforge](https://fontforge.org), export it with legacy kern data, and run `msdf-atlas-gen` on it.
+Check if the generated `metrics.json` contains a non empty `kernings` JSON field.
 
 # TODO
+- Shadowcaster
 - Drawer : one drawer instance per **shader**. Fixme state by material
 - MaterialPropertyDrawer load from texture : finish reconstructing text
 - Back of the card (proper) : one of 2 vortex shadertoys ; beware of cost
 - Change line order with buttons ? May be annoying if text focus does not like it
 - Package release when operational
 - Some space left in line control pixel for storing config : boldness, color ?
+- PBR material, foil effects ?
 - Convert encodings if a font is swapped ?
 
 Make an instanced version of the shader for deck/collection of cards ?
