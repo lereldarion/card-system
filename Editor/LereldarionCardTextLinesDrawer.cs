@@ -121,21 +121,22 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 
     public override void OnGUI(Rect rect, MaterialProperty encoding_texture_prop, string label, MaterialEditor editor)
     {
-        Material material = (Material)editor.target;
         float line_height = base.GetPropertyHeight(encoding_texture_prop, label, editor);
         float line_spacing = line_height + 1;
+        Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_height);
+
+        // Always show one line.
+        gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, label);
+
+        if (!gui_section_foldout) { return; }
+
+        gui_full_line.y += line_spacing;
         LoadState(encoding_texture_prop, editor);
 
-        // Style
-        Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_height);
+        // Styles for later
         GUIStyle style_label_centered = new GUIStyle(EditorStyles.label); style_label_centered.alignment = TextAnchor.MiddleCenter;
         GUIStyle invalid_text_field = StyleWithRedText(EditorStyles.textField);
         float numeric_field_width = 4.5f * line_height;
-
-        // Section folding
-        gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, label);
-        if (!gui_section_foldout) { return; }
-        gui_full_line.y += line_spacing;
 
         // Header line in case of error
         if (cache_state != CachedState.Text)
@@ -191,9 +192,11 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 AssetDatabase.CreateAsset(encoding_texture, current_encoding_texture_asset_path);
             }
 
+            Material material = editor.target as Material;
             material.SetVector(font_config_property_name, new Vector4(font.grid_cell_pixels.x, font.grid_cell_pixels.y, font.grid_dimensions.x, font.msdf_pixel_range));
             material.SetInteger(line_count_property_name, line_count);
             material.SetTexture(encoding_texture_prop.name, encoding_texture);
+            
 
             current_encoding_texture = encoding_texture;
         }
@@ -233,10 +236,12 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
     {
         float line_height = base.GetPropertyHeight(prop, label, editor);
         float line_spacing = line_height + 1;
-        LoadState(prop, editor);
 
+        if (!gui_section_foldout) { return line_spacing; }
+
+        LoadState(prop, editor);
         int text_line_count = cache_state == CachedState.Text ? line_cache.lines.Count : 0;
-        return line_spacing * (1 + (gui_section_foldout ? 1 + text_line_count : 0));
+        return line_spacing * (2 + text_line_count);
     }
 
     private class LineCache

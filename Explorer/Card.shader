@@ -39,7 +39,7 @@ Shader "Lereldarion/Card/Explorer" {
         // _Logo_Rotation_Scale_Offset("Logo rotation, scale, offset", Vector) = (23, 0.41, 0.19, -0.097)
         // _Logo_MSDF_Pixel_Range("Logo MSDF pixel range", Float) = 8
         // _Logo_MSDF_Texture_Size("Logo MSDF texture size", Float) = 128
-        _Logo_Back_Size("Card back logo size", Float) = 0.35
+        // _Logo_Back_Size("Card back logo size", Float) = 0.35
 
         [Header(Text)]
         [LereldarionCardTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
@@ -96,7 +96,7 @@ Shader "Lereldarion/Card/Explorer" {
         static const float4 _Logo_Rotation_Scale_Offset = float4(23, 0.41, 0.19, -0.097);
         static const float _Logo_MSDF_Pixel_Range = 8;
         static const float _Logo_MSDF_Texture_Size = 128;
-        uniform float _Logo_Back_Size;
+        static const float _Logo_Back_Size = 0.35;
 
         uniform Texture2D<float4> _Text_Encoding_Texture; // uint4 but must use float4 due to unity refusing to create a u32x4 texture. Bitcast !
         uniform uint _Text_LineCount;
