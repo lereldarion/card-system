@@ -25,9 +25,9 @@ using Unity.Collections;
 public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 {
     // Values from shader property arguments
-    private readonly string font_texture_property_name = null;
-    private readonly string font_config_property_name = null;
-    private readonly string line_count_property_name = null;
+    private readonly string font_texture_property_name;
+    private readonly string font_config_property_name;
+    private readonly string line_count_property_name;
 
     // Shared gui state
     private bool gui_section_foldout = false;
@@ -35,17 +35,19 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
     // Caching state. Avoid reloading font metrics and text everytime.
     // Keep track of what was already validated or error.
     // TODO separate by material, revamp to handle errors
-    private CachedState cache_state = CachedState.None;
-    private enum CachedState { None, SelectionAndShaderProperties, Font, Text }
-    private Material current_material_selection = null;
-    private Texture current_font_texture = null;
-    private Font font = null;
-    private Texture current_encoding_texture = null;
-    private string current_encoding_texture_asset_path = "";
-    private LineCache line_cache;
-
-    // GUI state
-    private string gui_error = "";
+    private Dictionary<Material, Cache> cache_by_material = new Dictionary<Material, Cache>();
+    private class Cache
+    {
+        public string error = null;
+        public State state = State.ShaderChecks;
+        public enum State { ShaderChecks, LoadingFont, LoadingLines, Ok }
+        public Shader shader = null;
+        public Texture font_texture = null;
+        public Font font = null;
+        public Texture encoding_texture = null;
+        public string encoding_texture_asset_path = "";
+        public LineCache lines = null;
+    }
 
     public LereldarionCardTextLinesDrawer(string font_texture_property_name, string font_config_property_name, string line_count_property_name)
     {
@@ -55,71 +57,78 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         this.line_count_property_name = line_count_property_name;
     }
 
-    private void LoadState(MaterialProperty encoding_texture_prop, MaterialEditor editor)
+    private Cache GetCachedState(MaterialProperty encoding_texture_prop, MaterialEditor editor)
     {
-        if (editor.targets.Length > 1)
-        {
-            cache_state = CachedState.None;
-            gui_error = "Multi-editing is not supported";
-            return;
-        }
+        // Multi-editing is not supported
+        if (editor.targets.Length > 1) { return null; }
 
         Material material = editor.target as Material;
-        if (material != current_material_selection || cache_state == CachedState.None)
+        Cache cache;
+        if (!cache_by_material.TryGetValue(material, out cache))
         {
-            cache_state = CachedState.None;
-            current_material_selection = material;
-
-            // Shader sanity check, once per material change.
-            // Shader modification forces reloading the drawer class for a recheck, no need to check for shader change.
-            if (encoding_texture_prop.type != MaterialProperty.PropType.Texture) { gui_error = "[LereldarionCardTextLines(...)] must be applied to a Texture2D shader property"; return; }
-            if (!material.HasTexture(font_texture_property_name)) { gui_error = "LereldarionCardTextLines(font_texture_property_name, _, _) must point to a Texture shader property"; return; }
-            if (!material.HasVector(font_config_property_name)) { gui_error = "LereldarionCardTextLines(_, font_config_property_name, _) must point to an Vector shader property"; return; }
-            if (!material.HasInteger(line_count_property_name)) { gui_error = "LereldarionCardTextLines(_, _, line_count_property_name) must point to an Integer shader property"; return; }
-
-            cache_state = CachedState.SelectionAndShaderProperties;
+            cache = new Cache();
+            cache_by_material[material] = cache;
+            Debug.Log($"New cache for material {material.GetInstanceID()}");
         }
 
-        if (cache_state >= CachedState.SelectionAndShaderProperties)
+        if (material.shader != cache.shader || (cache.state == Cache.State.ShaderChecks && cache.error is null))
+        {
+            cache.state = Cache.State.ShaderChecks;
+            cache.shader = material.shader;
+            if (encoding_texture_prop.type != MaterialProperty.PropType.Texture) { cache.error = "[LereldarionCardTextLines(...)] must be applied to a Texture2D shader property"; return cache; }
+            if (!material.HasTexture(font_texture_property_name)) { cache.error = "LereldarionCardTextLines(font_texture_property_name, _, _) must point to a Texture shader property"; return cache; }
+            if (!material.HasVector(font_config_property_name)) { cache.error = "LereldarionCardTextLines(_, font_config_property_name, _) must point to an Vector shader property"; return cache; }
+            if (!material.HasInteger(line_count_property_name)) { cache.error = "LereldarionCardTextLines(_, _, line_count_property_name) must point to an Integer shader property"; return cache; }
+            cache.error = null;
+            cache.state = Cache.State.LoadingFont;
+            Debug.Log($"Material {material.GetInstanceID()} passed shader checks");
+        }
+
+        if (cache.state >= Cache.State.LoadingFont)
         {
             Texture font_texture = material.GetTexture(font_texture_property_name);
-            if (current_font_texture != font_texture || cache_state == CachedState.SelectionAndShaderProperties)
+            if (cache.font_texture != font_texture || (cache.state == Cache.State.LoadingFont && cache.error is null))
             {
-                cache_state = CachedState.SelectionAndShaderProperties;
-                current_font_texture = font_texture;
+                cache.state = Cache.State.LoadingFont;
+                cache.font_texture = font_texture;
 
                 // Load metrics file
-                if (font_texture is null) { gui_error = "Font texture is not defined"; return; }
+                if (font_texture is null) { cache.error = "Font texture is not defined"; return cache; }
                 string font_texture_path = AssetDatabase.GetAssetPath(font_texture);
-                if (font_texture_path is null || font_texture_path == "") { gui_error = "Font texture is not a valid asset"; return; }
+                if (font_texture_path is null || font_texture_path == "") { cache.error = "Font texture is not a valid asset"; return cache; }
                 string metrics_path = System.IO.Path.ChangeExtension(font_texture_path, ".metrics.json");
                 TextAsset metrics_json = AssetDatabase.LoadAssetAtPath<TextAsset>(metrics_path);
-                if (metrics_json is null) { gui_error = $"Could not open font metrics file at '{metrics_path}'"; return; }
+                if (metrics_json is null) { cache.error = $"Could not open font metrics file at '{metrics_path}'"; return cache; }
 
                 // Load glyph data from JSON.
                 MetricsJSON msdf_atlas_metrics = JsonUtility.FromJson<MetricsJSON>(metrics_json.text);
-                if (msdf_atlas_metrics.glyphs.Length == 0) { gui_error = $"Could not parse font metrics from '{metrics_path}'"; return; }
+                if (msdf_atlas_metrics.glyphs.Length == 0) { cache.error = $"Could not parse font metrics from '{metrics_path}'"; return cache; }
 
-                try { font = new Font(msdf_atlas_metrics); }
-                catch (Exception e) { gui_error = $"Failed to load font {metrics_path}: {e.Message}"; }
-                cache_state = CachedState.Font;
+                try { cache.font = new Font(msdf_atlas_metrics); }
+                catch (Exception e) { cache.error = $"Failed to load font {metrics_path}: {e.Message}"; return cache; }
+                cache.error = null;
+                cache.state = Cache.State.LoadingLines;
+                Debug.Log($"Material {material.GetInstanceID()} loaded font");
             }
         }
 
-        if (cache_state >= CachedState.Font)
+        if (cache.state >= Cache.State.LoadingLines)
         {
             Texture encoding_texture = encoding_texture_prop.textureValue;
-            if (current_encoding_texture != encoding_texture || cache_state == CachedState.Font)
+            if (cache.encoding_texture != encoding_texture || (cache.state == Cache.State.LoadingLines && cache.error is null))
             {
-                cache_state = CachedState.Font;
-                current_encoding_texture = encoding_texture;
+                cache.state = Cache.State.LoadingLines;
+                cache.encoding_texture = encoding_texture;
 
-                if (encoding_texture is not null) { current_encoding_texture_asset_path = AssetDatabase.GetAssetPath(encoding_texture); }
-                line_cache = font.DecodeLines(encoding_texture);
-                cache_state = CachedState.Text;
-                gui_error = "";
+                if (encoding_texture is not null) { cache.encoding_texture_asset_path = AssetDatabase.GetAssetPath(encoding_texture); }
+                try { cache.lines = cache.font.DecodeLines(encoding_texture); }
+                catch (Exception e) { cache.error = $"Failed to load lines from {cache.encoding_texture_asset_path}: {e.Message}"; return cache; }
+                cache.error = null;
+                cache.state = Cache.State.Ok;
+                Debug.Log($"Material {material.GetInstanceID()} loaded lines");
             }
         }
+        return cache;
     }
 
     public override void OnGUI(Rect rect, MaterialProperty encoding_texture_prop, string label, MaterialEditor editor)
@@ -130,19 +139,20 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 
         // Always show one line.
         gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, GUIContent.none);
-        editor.TexturePropertyMiniThumbnail(gui_full_line, encoding_texture_prop, label, "Text encoding texture"); // TODO handle change
+        editor.TexturePropertyMiniThumbnail(gui_full_line, encoding_texture_prop, label, "Text encoding texture"); // Sets property by itself
 
         if (!gui_section_foldout) { return; }
 
-        LoadState(encoding_texture_prop, editor);
+        Cache cache = GetCachedState(encoding_texture_prop, editor);
         gui_full_line.y += line_spacing;
 
         // Header line in case of error
-        if (cache_state != CachedState.Text)
+        if (cache is null || cache.state != Cache.State.Ok)
         {
+            string error_message = cache is not null ? cache.error : "Multi-editing is not supported";
             GUIStyle style = new GUIStyle(EditorStyles.label);
             style.normal.textColor = Color.red;
-            EditorGUI.LabelField(gui_full_line, gui_error, style);
+            EditorGUI.LabelField(gui_full_line, error_message, style);
             return;
         }
 
@@ -157,7 +167,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         Rect gui_line_transform = new Rect(gui_list_button.xMax + 1, gui_full_line.y, gui_line_inverted.x - gui_list_button.xMax - 2, line_height);
 
         // Header line
-        if (GUI.Button(gui_list_button, new GUIContent("+", "New line"))) { line_cache.AddLine(font); }
+        if (GUI.Button(gui_list_button, new GUIContent("+", "New line"))) { cache.lines.AddLine(cache.font); }
         float numeric_field_width = 0.25f * gui_line_transform.width;
         EditorGUI.LabelField(
             new Rect(gui_line_transform.x, gui_line_transform.y, 2 * numeric_field_width, line_height),
@@ -171,37 +181,37 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         EditorGUI.LabelField(gui_line_inverted, new GUIContent("◙", "Make inverted text (box with character glyph holes)"), style_label_centered);
         EditorGUI.LabelField(gui_line_text, new GUIContent("Text", "Line turns red if it contains characters not supported by the font"), style_label_centered);
 
-        GUIStyle save_button_style = line_cache.AllRepresentable() ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
+        GUIStyle save_button_style = cache.lines.AllRepresentable() ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
         bool gui_save_button = GUI.Button(
             new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height),
             new GUIContent("Save", "Write current text lines to encodings texture"), save_button_style);
-        if (gui_save_button && line_cache.AllRepresentable())
+        if (gui_save_button && cache.lines.AllRepresentable())
         {
-            var (encoding_texture, line_count) = font.EncodeLines(line_cache);
+            var (encoding_texture, line_count) = cache.font.EncodeLines(cache.lines);
 
             // Manage asset database. Try to keep the asset_path cached even if temporarily deleted.
             if (encoding_texture is null)
             {
-                if (current_encoding_texture is not null && AssetDatabase.Contains(current_encoding_texture))
+                if (cache.encoding_texture is not null && AssetDatabase.Contains(cache.encoding_texture))
                 {
-                    AssetDatabase.DeleteAsset(current_encoding_texture_asset_path);
+                    AssetDatabase.DeleteAsset(cache.encoding_texture_asset_path);
                 }
             }
             else
             {
-                if (current_encoding_texture_asset_path is null || current_encoding_texture_asset_path == "")
+                if (cache.encoding_texture_asset_path is null || cache.encoding_texture_asset_path == "")
                 {
-                    current_encoding_texture_asset_path = System.IO.Path.ChangeExtension(AssetDatabase.GetAssetPath(editor.target), $".{encoding_texture_prop.name}.asset");
+                    cache.encoding_texture_asset_path = System.IO.Path.ChangeExtension(AssetDatabase.GetAssetPath(editor.target), $".{encoding_texture_prop.name}.asset");
                 }
-                AssetDatabase.CreateAsset(encoding_texture, current_encoding_texture_asset_path);
+                AssetDatabase.CreateAsset(encoding_texture, cache.encoding_texture_asset_path);
             }
 
             Material material = editor.target as Material;
-            material.SetVector(font_config_property_name, new Vector4(font.grid_cell_pixels.x, font.grid_cell_pixels.y, font.grid_dimensions.x, font.msdf_pixel_range));
+            material.SetVector(font_config_property_name, new Vector4(cache.font.grid_cell_pixels.x, cache.font.grid_cell_pixels.y, cache.font.grid_dimensions.x, cache.font.msdf_pixel_range));
             material.SetInteger(line_count_property_name, line_count);
-            material.SetTexture(encoding_texture_prop.name, encoding_texture);
-            
-            current_encoding_texture = encoding_texture;
+            encoding_texture_prop.textureValue = encoding_texture;
+
+            cache.encoding_texture = encoding_texture;
         }
 
         bool gui_reload_button = GUI.Button(
@@ -209,11 +219,11 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             new GUIContent("Reload", "Discard changes and reload lines from encodings texture"));
         if (gui_reload_button)
         {
-            line_cache = font.DecodeLines(current_encoding_texture);
+            cache.lines = cache.font.DecodeLines(cache.encoding_texture);
         }
 
         // Lines of text metadata
-        for (int i = 0; i < line_cache.lines.Count; i += 1)
+        for (int i = 0; i < cache.lines.Count; i += 1)
         {
             gui_list_button.y += line_spacing;
             gui_line_transform.y += line_spacing;
@@ -221,16 +231,16 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             gui_line_text.y += line_spacing;
             if (GUI.Button(gui_list_button, new GUIContent("x", "Delete line")))
             {
-                line_cache.RemoveLine(i);
+                cache.lines.RemoveLine(i);
                 i -= 1; // Fix iteration count
             }
             else
             {
                 // Combine position & size to use the ergonomic Vector4Field GUI element : XYZW labels allow changing value smoothly with mouse.
-                line_cache.lines[i].transform = EditorGUI.Vector4Field(gui_line_transform, GUIContent.none, line_cache.lines[i].transform);
-                line_cache.lines[i].inverted = EditorGUI.Toggle(gui_line_inverted, line_cache.lines[i].inverted);
-                GUIStyle style = line_cache.lines[i].representable ? EditorStyles.textField : invalid_text_field;
-                line_cache.SetLineText(i, EditorGUI.TextField(gui_line_text, line_cache.lines[i].text, style), font);
+                cache.lines[i].transform = EditorGUI.Vector4Field(gui_line_transform, GUIContent.none, cache.lines[i].transform);
+                cache.lines[i].inverted = EditorGUI.Toggle(gui_line_inverted, cache.lines[i].inverted);
+                GUIStyle style = cache.lines[i].representable ? EditorStyles.textField : invalid_text_field;
+                cache.lines.SetLineText(i, EditorGUI.TextField(gui_line_text, cache.lines[i].text, style), cache.font);
             }
         }
     }
@@ -242,50 +252,45 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 
         if (!gui_section_foldout) { return line_spacing; }
 
-        LoadState(prop, editor);
-        int text_line_count = cache_state == CachedState.Text ? line_cache.lines.Count : 0;
-        return line_spacing * (2 + text_line_count);
+        Cache cache = GetCachedState(prop, editor);
+        if (cache is null || cache.state != Cache.State.Ok) { return 2 * line_spacing; }
+
+        return line_spacing * (2 + cache.lines.Count);
     }
 
-    private class LineCache
+    private class LineCache : List<LineCache.Line>
     {
-        public List<Line> lines;
         private bool? all_lines_representable = null;
-
-        public LineCache()
+        public bool AllRepresentable()
         {
-            lines = new List<Line>();
-            all_lines_representable = true;
+            if (all_lines_representable is null) { all_lines_representable = this.All(line => line.representable); }
+            return (bool)all_lines_representable;
         }
+
         public void AddLine(Font font)
         {
             Line line = new Line();
-            if (lines.Count > 0)
+            if (Count > 0)
             {
                 // Copy transform 1 line height lower for convenience
-                line.transform = lines.Last().transform;
+                line.transform = this.Last().transform;
                 line.NextLine(font);
             }
-            lines.Add(line);
+            this.Add(line);
         }
         public void RemoveLine(int i)
         {
-            lines.RemoveAt(i);
+            this.RemoveAt(i);
             all_lines_representable = null;
         }
         public void SetLineText(int i, string text, Font font)
         {
-            if (lines[i].text != text)
+            if (this[i].text != text)
             {
-                lines[i].text = text;
-                lines[i].representable = font.IsRepresentable(text);
+                this[i].text = text;
+                this[i].representable = font.IsRepresentable(text);
                 all_lines_representable = null;
             }
-        }
-        public bool AllRepresentable()
-        {
-            if (all_lines_representable is null) { all_lines_representable = lines.All(line => line.representable); }
-            return (bool)all_lines_representable;
         }
 
         public class Line
@@ -435,7 +440,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         public (Texture2D, int) EncodeLines(LineCache lines)
         {
             // Place characters one after another, computing center positions
-            LineWithLayout[] layouted_lines = lines.lines.Select(line =>
+            LineWithLayout[] layouted_lines = lines.Select(line =>
             {
                 float current_x = 0;
                 char previous_c = (char)0;
@@ -561,6 +566,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                     // Decode glyph atlas_id and line position. Ignore width, only useful for rendering as a bouding box.
                     float center_px = center_converter.Convert(pixel);
                     uint atlas_id = pixel >> (bits_center + bits_width);
+                    if (atlas_id >= glyphs.Length) { throw new Exception("Out of bounds glyph atlas id"); }
                     Glyph glyph = glyphs[atlas_id];
 
                     current_x += kerning_advance_px.GetValueOrDefault((previous_c, glyph.character));
@@ -578,7 +584,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 line.SetTransformFromShaderFormat(layouted_line.transform, this);
                 line.inverted = layouted_line.inverted;
                 line.text = text;
-                line_cache.lines.Add(line);
+                line_cache.Add(line);
             }
             return line_cache;
         }
