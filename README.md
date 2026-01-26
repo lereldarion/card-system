@@ -69,13 +69,15 @@ If your font kerning is not working, the solution is to open the font with [font
 Check if the generated `metrics.json` contains a non empty `kernings` JSON field.
 
 # TODO
+Needed TODOs
 - Drawer : one drawer instance per **shader**. Fixme state by material
-- MaterialPropertyDrawer load from texture : finish reconstructing text
 - Back of the card (proper) : one of 2 vortex shadertoys ; beware of cost
-- Change line order with buttons ? May be annoying if text focus does not like it
 - Package release when operational
-- Some space left in line control pixel for storing config : boldness, color ?
+
+Ideas
 - PBR material, foil effects ?
+- Change line order with buttons ? May be annoying if text focus does not like it
+- Some space left in line control pixel for storing config : boldness, color ?
 - Convert encodings if a font is swapped ?
 
 Make an instanced version of the shader for deck/collection of cards ?

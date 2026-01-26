@@ -334,6 +334,11 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         public readonly Dictionary<(char, char), float> kerning_advance_px;
         public struct Glyph
         {
+            // | left |advance |right-advance| Usable width of glyph.
+            // |      |       .       |      |
+            //      origin     `center         <- referential of EM
+            // Center should always be the same, but recompute offset anyway.
+            // Glyph width_unorm is size ratio of the center section
             public char character;
             public float advance_px;
             public float center_px;
@@ -358,7 +363,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             // Scan glyphs to find the first with EM size data to use as model, as all glyphs share the same in uniform grid mode.
             Vector2 glyph_em_size = metrics.glyphs.Select(glyph => glyph.planeBounds.Size()).First(size => size != Vector2.zero);
             Vector2 em_to_pixel = ((Vector2)grid_cell_usable_pixels) / glyph_em_size;
-            UNormConverter width_converter = new UNormConverter(bits_width, glyph_em_size.x);
+            FloatToUNorm width_converter = new FloatToUNorm(bits_width, glyph_em_size.x);
 
             // Glyph pixel info
             font_ascender_pixels = em_to_pixel.y * metrics.metrics.ascender;
@@ -394,7 +399,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                         character = character,
                         advance_px = em_to_pixel.x * glyph.advance,
                         center_px = em_to_pixel.x * glyph_em_center,
-                        width_unorm = width_converter.ToUNorm(centered_width),
+                        width_unorm = width_converter.Convert(centered_width),
                     };
                     char_to_atlas_id.Add(character, (uint)atlas_id);
                 }
@@ -429,11 +434,10 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 var layouted_glyphs = new List<LineWithLayout.Glyph>();
                 foreach (char c in line.text)
                 {
-                    // Kerning : apply delta
                     current_x += kerning_advance_px.GetValueOrDefault((previous_c, c));
                     previous_c = c;
 
-                    if (whitespace_advance_px.TryGetValue(c, out float advance)) { current_x += advance; }
+                    if (whitespace_advance_px.TryGetValue(c, out float advance_px)) { current_x += advance_px; }
                     else
                     {
                         uint atlas_id = char_to_atlas_id[c];
@@ -479,11 +483,11 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 line_pixels[3] = (uint)Mathf.FloatToHalf(line.transform.w);
 
                 // Encode glyphs
-                UNormConverter center_converter = new UNormConverter(bits_center, line.width_px);
+                FloatToUNorm center_converter = new FloatToUNorm(bits_center, line.width_px);
                 int offset = 4;
                 foreach (var glyph in line.glyphs)
                 {
-                    encoding_pixels[offset++] = center_converter.ToUNorm(glyph.center_px)
+                    encoding_pixels[offset++] = center_converter.Convert(glyph.center_px)
                         | (glyphs[glyph.atlas_id].width_unorm << bits_center)
                         | (glyph.atlas_id << (bits_center + bits_width));
                 }
@@ -537,18 +541,57 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 float line_width_px = Mathf.HalfToFloat((ushort)(line_pixels[0] >> 16));
                 layouted_line.inverted = line_width_px < 0;
                 line_width_px = Mathf.Abs(line_width_px);
-                uint glyph_count = line_pixels[1] >> 16;
+                int glyph_count = (ushort)(line_pixels[1] >> 16);
 
                 // TODO read chars. Track advance and add spaces in gaps.
+                UNormToFloat center_converter = new UNormToFloat(bits_center, line_width_px);
+                string text = "";
                 char previous_c = (char)0;
+                float current_x = 0;
+                foreach (uint pixel in line_pixels.Slice(4, glyph_count))
+                {
+                    // Decode glyph atlas_id and line position. Ignore width, only useful for rendering as a bouding box.
+                    float center_px = center_converter.Convert(pixel);
+                    uint atlas_id = pixel >> (bits_center + bits_width);
+                    Glyph glyph = glyphs[atlas_id];
+
+                    current_x += kerning_advance_px.GetValueOrDefault((previous_c, glyph.character));
+                    previous_c = glyph.character;
+
+                    float glyph_origin_px = center_px - glyph.center_px;
+                    text += EstimateWhitespace(glyph_origin_px - current_x);
+                    text += glyph.character;
+                    current_x = glyph_origin_px + glyph.advance_px;
+                }
+                text += EstimateWhitespace(line_width_px - current_x); // Trailing whitespace
 
                 // Reconstructed line
                 var line = new LineCache.Line();
                 line.SetTransformFromShaderFormat(layouted_line.transform, this);
                 line.inverted = layouted_line.inverted;
+                line.text = text;
                 line_cache.lines.Add(line);
             }
             return line_cache;
+        }
+        string EstimateWhitespace(float px)
+        {
+            // For simplicity, assume that a sequence of whitespace is of the same type.
+            // Return the sequence of (space_type, count) that best fits the gap, with "" as default.
+            // Detecting mixes would require solving a LP problem, and uses that require that are cursed anyway.
+            string whitespace = "";
+            float best_error = Mathf.Abs(px);
+            foreach (var (space, advance_px) in whitespace_advance_px)
+            {
+                int count = Mathf.RoundToInt(px / advance_px);
+                float error = Mathf.Abs(px - count * advance_px);
+                if (count > 0 && error < best_error)
+                {
+                    best_error = error;
+                    whitespace = new string(space, count);
+                }
+            }
+            return whitespace;
         }
     }
 
@@ -638,19 +681,30 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         return style;
     }
 
-    private class UNormConverter
+    private class FloatToUNorm
     {
-        private float range;
-        private float conversion_factor;
-        public UNormConverter(int bits, float range)
+        private readonly float range;
+        private readonly float float_to_unorm;
+        public FloatToUNorm(int bits, float range)
         {
-            conversion_factor = ((1 << bits) - 1) / range;
+            float_to_unorm = ((1u << bits) - 1u) / range;
             this.range = range;
         }
-        public uint ToUNorm(float v)
+        public uint Convert(float v)
         {
             v = Mathf.Clamp(v, 0, range);
-            return (uint)Mathf.RoundToInt(v * conversion_factor);
+            return (uint)Mathf.RoundToInt(v * float_to_unorm);
         }
+    }
+    private class UNormToFloat
+    {
+        private readonly uint mask;
+        private readonly float unorm_to_float;
+        public UNormToFloat(int bits, float range)
+        {
+            mask = (1u << bits) - 1u;
+            unorm_to_float = range / mask;
+        }
+        public float Convert(uint v) { return (v & mask) * unorm_to_float; }
     }
 }
