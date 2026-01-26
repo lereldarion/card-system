@@ -197,6 +197,7 @@ Shader "Lereldarion/Card/Explorer" {
                 return -texture_uv_sd; // MSDF tooling generates inverted SDF (positive inside)
             }
 
+            // Text system
             float sdf_lereldarion_text_lines(float2 uv, Texture2D<float3> font_atlas, float4 font_config, Texture2D<float4> encodings, uint line_count) {
                 // Prepare constants
                 const uint bits_atlas_id = 12; const uint bits_atlas_id_mask = (1u << bits_atlas_id) - 1u;
@@ -299,6 +300,56 @@ Shader "Lereldarion/Card/Explorer" {
                 return sd;
             }
 
+            // Card back : shadertoy adapted from https://www.shadertoy.com/view/WdyXDR
+            float2 glsl_mod(float2 x, float y) { return x - y * floor(x / y); }
+            float hash12_tiling(float2 p, float scale) {
+                p = glsl_mod(p, scale);
+                float3 p3  = frac(p.xyx * .1031);
+                p3 += dot(p3, p3.yzx + 33.33);
+                return frac((p3.x + p3.y) * p3.z);
+            }
+            float smooth_noise(float2 p, float scale) {
+                p *= scale;
+                float2 f = frac(p);
+                p = floor(p);
+                f = f * f * (3.0 - 2.0 * f);
+                return lerp(
+                    lerp(hash12_tiling(p + float2(0, 0), scale), hash12_tiling(p + float2(1, 0), scale), f.x),
+                    lerp(hash12_tiling(p + float2(0, 1), scale), hash12_tiling(p + float2(1, 1), scale), f.x),
+                    f.y
+                );
+            }
+            float fractal_brownian_motion_noise(float2 p) {
+                float f = 0.0;
+                float scale = 80.0; // integer
+                float amp = 0.6;
+                for (int i = 0; i < 5; i++) {
+                    f += smooth_noise(p, scale) * amp;
+                    amp *= 0.5;
+                    scale *= 2.0; // integer scale
+                }
+                return min(f, 1.0);
+            }
+            fixed3 vortex_color(float2 p, float time) {
+                const float linear_speed = 0.1;
+                const float rotation_speed = 0.2;
+                const float focal = 0.1;
+
+                const float radius = length(p);
+                float2 polar = float2(
+                    frac((atan2(p.y, p.x) - time * rotation_speed) / UNITY_TWO_PI),
+                    focal / radius + linear_speed * time
+                );
+                polar.x += polar.y;
+
+                float fbm = fractal_brownian_motion_noise(polar);
+
+                fixed3 color = fixed3(0.1, 0.1, 1) * fbm; // Blue
+                color += smoothstep(0.8, 1.0, fbm); // White spots
+                color *= smoothstep(0, 0.7, radius); // Darken center
+                return saturate(color);
+            }
+
             fixed4 fragment_stage(FragmentInput input, bool is_front_face : SV_IsFrontFace) : SV_Target {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
@@ -322,18 +373,22 @@ Shader "Lereldarion/Card/Explorer" {
                 if(length_sq(max(abs(centered_uv) - (quadrant_size - _Corner_Radius), 0)) > _Corner_Radius * _Corner_Radius) {
                      discard;
                 }
-
-                // Back of the card
-                if(!is_front_face) {
-                    // TODO improve this placeholder. https://www.shadertoy.com/view/w33GRl ? cheaper https://www.shadertoy.com/view/WdyXDR ?
-                    const float sd = msdf_sample(_Logo_Texture, centered_uv / _Logo_Back_Size + 0.5, _Logo_MSDF_Pixel_Range, _Logo_MSDF_Texture_Size);
-                    fixed3 color = lerp(0, _UI_Color.rgb, sdf_blend_with_aa(sd * _Logo_Back_Size, screenspace_scale_of_uv));
-                    return fixed4(color, 1);
-                }
-
+                
                 // Outer box
                 const float border_box_sd = psdf_chamfer_box(centered_uv, quadrant_size - _UI_Common_Margin, _UI_Outer_Border_Chamfer);
                 ui_sd = extrude_border_with_thickness(border_box_sd, _UI_Border_Thickness);
+
+                // Back of the card. Reuses border.
+                if(!is_front_face) {
+                    const float2 back_centered_uv = float2(-1, 1) * centered_uv; 
+                    const float logo_sd = msdf_sample(_Logo_Texture, back_centered_uv / _Logo_Back_Size + 0.5, _Logo_MSDF_Pixel_Range, _Logo_MSDF_Texture_Size);
+                    ui_sd = min(ui_sd, logo_sd * _Logo_Back_Size);
+
+                    fixed3 color = vortex_color(back_centered_uv, _Time.y);
+                    if(border_box_sd > 0) { color *= 0.1; }
+                    color = lerp(color, _UI_Color.rgb, sdf_blend_with_aa(ui_sd, screenspace_scale_of_uv));
+                    return fixed4(color, 1);
+                }
 
                 // Border triangles gizmos
                 if((centered_uv.x >= 0) == (centered_uv.y >= 0)) {

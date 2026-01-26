@@ -71,7 +71,7 @@ Check if the generated `metrics.json` contains a non empty `kernings` JSON field
 # TODO
 Needed TODOs
 - Drawer : one drawer instance per **shader**. Fixme state by material
-- Back of the card (proper) : one of 2 vortex shadertoys ; beware of cost
+- Drawer expose slot for encoding texture ?
 - Package release when operational
 
 Ideas
