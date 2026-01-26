@@ -487,7 +487,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 int offset = 4;
                 foreach (var glyph in line.glyphs)
                 {
-                    encoding_pixels[offset++] = center_converter.Convert(glyph.center_px)
+                    line_pixels[offset++] = center_converter.Convert(glyph.center_px)
                         | (glyphs[glyph.atlas_id].width_unorm << bits_center)
                         | (glyph.atlas_id << (bits_center + bits_width));
                 }
