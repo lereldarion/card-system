@@ -29,8 +29,12 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
     private readonly string font_config_property_name = null;
     private readonly string line_count_property_name = null;
 
+    // Shared gui state
+    private bool gui_section_foldout = false;
+
     // Caching state. Avoid reloading font metrics and text everytime.
     // Keep track of what was already validated or error.
+    // TODO separate by material, revamp to handle errors
     private CachedState cache_state = CachedState.None;
     private enum CachedState { None, SelectionAndShaderProperties, Font, Text }
     private Material current_material_selection = null;
@@ -41,7 +45,6 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
     private LineCache line_cache;
 
     // GUI state
-    private bool gui_section_foldout = true;
     private string gui_error = "";
 
     public LereldarionCardTextLinesDrawer(string font_texture_property_name, string font_config_property_name, string line_count_property_name)
@@ -61,7 +64,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             return;
         }
 
-        Material material = (Material)editor.target;
+        Material material = editor.target as Material;
         if (material != current_material_selection || cache_state == CachedState.None)
         {
             cache_state = CachedState.None;
@@ -123,20 +126,16 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
     {
         float line_height = base.GetPropertyHeight(encoding_texture_prop, label, editor);
         float line_spacing = line_height + 1;
-        Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_height);
+        Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_spacing);
 
         // Always show one line.
-        gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, label);
+        gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, GUIContent.none);
+        editor.TexturePropertyMiniThumbnail(gui_full_line, encoding_texture_prop, label, "Text encoding texture"); // TODO handle change
 
         if (!gui_section_foldout) { return; }
 
-        gui_full_line.y += line_spacing;
         LoadState(encoding_texture_prop, editor);
-
-        // Styles for later
-        GUIStyle style_label_centered = new GUIStyle(EditorStyles.label); style_label_centered.alignment = TextAnchor.MiddleCenter;
-        GUIStyle invalid_text_field = StyleWithRedText(EditorStyles.textField);
-        float numeric_field_width = 4.5f * line_height;
+        gui_full_line.y += line_spacing;
 
         // Header line in case of error
         if (cache_state != CachedState.Text)
@@ -147,14 +146,19 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             return;
         }
 
+        // Styles for later
+        GUIStyle style_label_centered = new GUIStyle(EditorStyles.label); style_label_centered.alignment = TextAnchor.MiddleCenter;
+        GUIStyle invalid_text_field = StyleWithRedText(EditorStyles.textField);
+
         // Column positions
         Rect gui_list_button = new Rect(gui_full_line.x, gui_full_line.y, line_height, line_height);
-        Rect gui_line_transform = new Rect(gui_list_button.xMax + 1, gui_full_line.y, 4 * numeric_field_width, line_height);
-        Rect gui_line_inverted = new Rect(gui_line_transform.xMax + 1, gui_full_line.y, line_height, line_height);
-        Rect gui_line_text = new Rect(gui_line_inverted.xMax + 1, gui_full_line.y, gui_full_line.xMax - gui_line_inverted.xMax, line_height);
+        Rect gui_line_text = new Rect(gui_full_line.center.x, gui_full_line.y, gui_full_line.width * 0.5f, line_height);
+        Rect gui_line_inverted = new Rect(gui_line_text.x - line_height, gui_full_line.y, line_height, line_height);
+        Rect gui_line_transform = new Rect(gui_list_button.xMax + 1, gui_full_line.y, gui_line_inverted.x - gui_list_button.xMax - 2, line_height);
 
         // Header line
         if (GUI.Button(gui_list_button, new GUIContent("+", "New line"))) { line_cache.AddLine(font); }
+        float numeric_field_width = 0.25f * gui_line_transform.width;
         EditorGUI.LabelField(
             new Rect(gui_line_transform.x, gui_line_transform.y, 2 * numeric_field_width, line_height),
             new GUIContent("Offset", "Offset in UV units"), style_label_centered);
@@ -197,7 +201,6 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             material.SetInteger(line_count_property_name, line_count);
             material.SetTexture(encoding_texture_prop.name, encoding_texture);
             
-
             current_encoding_texture = encoding_texture;
         }
 

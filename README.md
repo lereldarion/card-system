@@ -71,7 +71,8 @@ Check if the generated `metrics.json` contains a non empty `kernings` JSON field
 # TODO
 Needed TODOs
 - Drawer : one drawer instance per **shader**. Fixme state by material
-- Drawer expose slot for encoding texture ?
+- Better errors when loading encodings.
+- Issue when cloning the material, as 2 mats will reference the text, and editing it will break the other. Handle texture change in the slot.
 - Package release when operational
 
 Ideas
