@@ -35,7 +35,7 @@ Shader "Lereldarion/Card/Explorer" {
 
         [Header(Logo)]
         _Logo_Color("Color", Color) = (1, 1, 1, 0.1)
-        _Logo_Texture("Logo (MSDF)", 2D) = "" {}
+        [HideInInspector] _Logo_Texture("Logo (MSDF)", 2D) = "" {}
         // _Logo_Rotation_Scale_Offset("Logo rotation, scale, offset", Vector) = (23, 0.41, 0.19, -0.097)
         // _Logo_MSDF_Pixel_Range("Logo MSDF pixel range", Float) = 8
         // _Logo_MSDF_Texture_Size("Logo MSDF texture size", Float) = 128

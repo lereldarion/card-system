@@ -136,9 +136,10 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         // Always show one line.
         gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, GUIContent.none);
         editor.TexturePropertyMiniThumbnail(gui_full_line, encoding_texture_prop, label, "Text encoding texture"); // Sets property by itself
+        float clone_button_width = 6 * line_height;
         bool gui_clone_button = GUI.Button(
-            new Rect(gui_full_line.xMax - 10 * line_height, gui_full_line.y, 10 * line_height, line_height),
-            new GUIContent("Clone as separate asset", "Uses the default path with suffix"));
+            new Rect(gui_full_line.xMax - clone_button_width, gui_full_line.y, clone_button_width, line_height),
+            new GUIContent("Use a duplicate", "Clone texture and use the clone ; use this after cloning the material to edit a fresh copy of text data"));
         if (gui_clone_button && encoding_texture_prop.textureValue is not null)
         {
             // Find a free asset path
