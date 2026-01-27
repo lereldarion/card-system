@@ -107,7 +107,7 @@ Shader "Lereldarion/Card/Explorer" {
         float length_sq(float2 v) { return dot(v, v); }
         float3 safe_normalize(float3 v) { return v * rsqrt(max(0.001f, dot(v, v))); }
         float2 pow2(float2 v) { return v * v; }
-        static const float f32_infinity = asfloat(0x3f800000);
+        static const float f32_infinity = asfloat(0x7f800000);
 
         ENDCG
 
