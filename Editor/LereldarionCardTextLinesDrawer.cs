@@ -87,6 +87,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             Texture font_texture = material.GetTexture(font_texture_property_name);
             if (cache.font_texture != font_texture || (cache.state == Cache.State.LoadingFont && cache.error is null))
             {
+                Cache.State previous_state = cache.state;
                 cache.state = Cache.State.LoadingFont;
                 cache.font_texture = font_texture;
 
@@ -101,11 +102,18 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 // Load glyph data from JSON.
                 MetricsJSON msdf_atlas_metrics = JsonUtility.FromJson<MetricsJSON>(metrics_json.text);
                 if (msdf_atlas_metrics.glyphs.Length == 0) { cache.error = $"Could not parse font metrics from '{metrics_path}'"; return cache; }
-
                 try { cache.font = new Font(msdf_atlas_metrics); }
                 catch (Exception e) { cache.error = $"Failed to load font {metrics_path}: {e.Message}"; return cache; }
+
                 cache.error = null;
                 cache.state = Cache.State.LoadingLines;
+
+                // Keep already loaded lines to allow easy conversion
+                if (previous_state == Cache.State.Ok)
+                {
+                    cache.lines.ForceCharactersScan();
+                    cache.state = Cache.State.Ok;
+                }
             }
         }
 
@@ -132,13 +140,13 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         float line_height = base.GetPropertyHeight(encoding_texture_prop, label, editor);
         float line_spacing = line_height + 1;
         Rect gui_full_line = new Rect(rect.x, rect.y, rect.width, line_spacing);
+        float button_width = 6 * line_height;
 
         // Always show one line.
         gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, GUIContent.none);
         editor.TexturePropertyMiniThumbnail(gui_full_line, encoding_texture_prop, label, "Text encoding texture"); // Sets property by itself
-        float clone_button_width = 6 * line_height;
         bool gui_clone_button = GUI.Button(
-            new Rect(gui_full_line.xMax - clone_button_width, gui_full_line.y, clone_button_width, line_height),
+            new Rect(gui_full_line.xMax - button_width, gui_full_line.y, button_width, line_height),
             new GUIContent("Use a duplicate", "Clone texture and use the clone ; use this after cloning the material to edit a fresh copy of text data"));
         if (gui_clone_button && encoding_texture_prop.textureValue is not null)
         {
@@ -197,13 +205,18 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             new Rect(gui_line_transform.x + 3 * numeric_field_width, gui_line_transform.y, numeric_field_width, line_height),
             new GUIContent("Rotation", "Rotate text around bottom-left corner (degrees)"), style_label_centered);
         EditorGUI.LabelField(gui_line_inverted, new GUIContent("◙", "Make inverted text (box with character glyph holes)"), style_label_centered);
-        EditorGUI.LabelField(gui_line_text, new GUIContent("Text", "Line turns red if it contains characters not supported by the font"), style_label_centered);
 
-        GUIStyle save_button_style = cache.lines.AllRepresentable() ? GUI.skin.button : StyleWithRedText(GUI.skin.button);
+        EditorGUI.LabelField(
+            new Rect(gui_line_text.x + button_width, gui_line_text.y, gui_line_text.width - 2 * button_width, line_height),
+            new GUIContent("Text", "Line turns red if it contains characters not supported by the font"), style_label_centered);
+
+        string non_representable_characters = cache.lines.FindNonRepresentableCharacters(cache.font);
         bool gui_save_button = GUI.Button(
-            new Rect(gui_line_text.x, gui_full_line.y, 0.2f * gui_line_text.width, line_height),
-            new GUIContent("Save", "Write current text lines to encodings texture"), save_button_style);
-        if (gui_save_button && cache.lines.AllRepresentable())
+            new Rect(gui_line_text.x, gui_full_line.y, button_width, line_height),
+            new GUIContent("Save",
+                non_representable_characters == "" ? "Write current text lines to encodings texture" : $"Not representable: {non_representable_characters}"),
+            non_representable_characters == "" ? GUI.skin.button : StyleWithRedText(GUI.skin.button));
+        if (gui_save_button && non_representable_characters == "")
         {
             var (encoding_texture, line_count) = cache.font.EncodeLines(cache.lines);
 
@@ -230,7 +243,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         }
 
         bool gui_reload_button = GUI.Button(
-            new Rect(gui_line_text.x + 0.8f * gui_line_text.width, gui_full_line.y, 0.2f * gui_line_text.width, line_height),
+            new Rect(gui_line_text.xMax - button_width, gui_full_line.y, button_width, line_height),
             new GUIContent("Reload", "Discard changes and reload lines from encodings texture"));
         if (gui_reload_button)
         {
@@ -255,8 +268,8 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 // Combine position & size to use the ergonomic Vector4Field GUI element : XYZW labels allow changing value smoothly with mouse.
                 cache.lines[i].transform = EditorGUI.Vector4Field(gui_line_transform, GUIContent.none, cache.lines[i].transform);
                 cache.lines[i].inverted = EditorGUI.Toggle(gui_line_inverted, cache.lines[i].inverted);
-                GUIStyle style = cache.lines[i].representable ? EditorStyles.textField : invalid_text_field;
-                cache.lines.SetLineText(i, EditorGUI.TextField(gui_line_text, cache.lines[i].text, style), cache.font);
+                GUIStyle style = cache.lines[i].non_representable_characters == "" ? EditorStyles.textField : invalid_text_field;
+                cache.lines.SetLineText(i, EditorGUI.TextField(gui_line_text, cache.lines[i].text, style));
             }
         }
     }
@@ -276,11 +289,24 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
 
     private class LineCache : List<LineCache.Line>
     {
-        private bool? all_lines_representable = null;
-        public bool AllRepresentable()
+        private string non_representable_characters = null; // Global cache.
+        public string FindNonRepresentableCharacters(Font font)
         {
-            if (all_lines_representable is null) { all_lines_representable = this.All(line => line.representable); }
-            return (bool)all_lines_representable;
+            if (non_representable_characters is null)
+            {
+                // Refresh cache
+                non_representable_characters = string.Concat(this.Select(line =>
+                {
+                    if (line.non_representable_characters is null) { line.non_representable_characters = font.FindNonRepresentableCharacters(line.text); }
+                    return line.non_representable_characters;
+                }));
+            }
+            return non_representable_characters;
+        }
+        public void ForceCharactersScan()
+        {
+            non_representable_characters = null;
+            foreach (var line in this) { line.non_representable_characters = null; }
         }
 
         public void AddLine(Font font)
@@ -290,22 +316,22 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             {
                 // Copy transform 1 line height lower for convenience
                 line.transform = this.Last().transform;
-                line.NextLine(font);
+                line.OffsetToNextLine(font);
             }
             this.Add(line);
         }
         public void RemoveLine(int i)
         {
             this.RemoveAt(i);
-            all_lines_representable = null;
+            non_representable_characters = null;
         }
-        public void SetLineText(int i, string text, Font font)
+        public void SetLineText(int i, string text)
         {
             if (this[i].text != text)
             {
                 this[i].text = text;
-                this[i].representable = font.IsRepresentable(text);
-                all_lines_representable = null;
+                this[i].non_representable_characters = null;
+                non_representable_characters = null;
             }
         }
 
@@ -314,8 +340,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             public Vector4 transform = new Vector4(0, 0, 1, 0); // Offset.xy, FontSize, Rotation(deg)
             public string text = "";
             public bool inverted = false;
-
-            public bool representable = true;
+            public string non_representable_characters = ""; // Local cache
 
             public Vector4 TransformToShaderFormat(Font font)
             {
@@ -335,7 +360,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 transform.y = shader_transform.y - baseline_offset;
                 transform.w = Mathf.Atan2(shader_transform.w, shader_transform.z) * 180f / Mathf.PI;
             }
-            public void NextLine(Font font)
+            public void OffsetToNextLine(Font font)
             {
                 float y_shift_uv = -transform.z * font.line_height_as_ascender_ratio;
                 float rotation_radians = transform.w * Mathf.PI / 180f;
@@ -440,7 +465,10 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 kerning => kerning.advance * em_to_pixel.x);
         }
 
-        public bool IsRepresentable(string text) { return text.All(c => char_to_atlas_id.ContainsKey(c) || whitespace_advance_px.ContainsKey(c)); }
+        public string FindNonRepresentableCharacters(string text)
+        {
+            return new string(text.SkipWhile(c => char_to_atlas_id.ContainsKey(c) || whitespace_advance_px.ContainsKey(c)).ToArray());
+        }
 
         // Encode lines in a texture. Returns (texture, line_count). line_count == 0 => texture = null.
         // RGBA u32 texture, line per line.
@@ -551,7 +579,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         public LineCache DecodeLines(Texture encodings)
         {
             var line_cache = new LineCache();
-            if (encodings is null) { return line_cache; } // Empty
+            if (encodings is null) { return line_cache; } // Empty is ok
 
             if (!(encodings is Texture2D && encodings.graphicsFormat == GraphicsFormat.R32G32B32A32_SFloat)) { throw new Exception("Bad text encoding texture format"); }
 

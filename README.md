@@ -76,7 +76,6 @@ Ideas
 - PBR material, foil effects ?
 - Change line order with buttons ? May be annoying if text focus does not like it
 - Some space left in line control pixel for storing config : boldness, color ?
-- Convert encodings if a font is swapped ?
 
 Make an instanced version of the shader for deck/collection of cards ?
 - Requires tex2D array + fixed instanced id. Textures cannot be instanced.

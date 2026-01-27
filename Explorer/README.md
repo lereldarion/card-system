@@ -16,4 +16,10 @@ Charset
 "“”–—×°"
 ```
 
-TODO missing 'ç' but wait until some use to regenerate with an expanded charset.
+TODO new charset
+```
+[32, 126]
+"àâåÅçÇéÉèÈêÊëïñôùÿ"
+"æœ"
+"“”–—×°"
+```
