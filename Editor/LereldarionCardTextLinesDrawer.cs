@@ -68,7 +68,6 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         {
             cache = new Cache();
             cache_by_material[material] = cache;
-            Debug.Log($"New cache for material {material.GetInstanceID()}");
         }
 
         if (material.shader != cache.shader || (cache.state == Cache.State.ShaderChecks && cache.error is null))
@@ -81,7 +80,6 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             if (!material.HasInteger(line_count_property_name)) { cache.error = "LereldarionCardTextLines(_, _, line_count_property_name) must point to an Integer shader property"; return cache; }
             cache.error = null;
             cache.state = Cache.State.LoadingFont;
-            Debug.Log($"Material {material.GetInstanceID()} passed shader checks");
         }
 
         if (cache.state >= Cache.State.LoadingFont)
@@ -108,7 +106,6 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 catch (Exception e) { cache.error = $"Failed to load font {metrics_path}: {e.Message}"; return cache; }
                 cache.error = null;
                 cache.state = Cache.State.LoadingLines;
-                Debug.Log($"Material {material.GetInstanceID()} loaded font");
             }
         }
 
@@ -125,7 +122,6 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 catch (Exception e) { cache.error = $"Failed to load lines from {cache.encoding_texture_asset_path}: {e.Message}"; return cache; }
                 cache.error = null;
                 cache.state = Cache.State.Ok;
-                Debug.Log($"Material {material.GetInstanceID()} loaded lines");
             }
         }
         return cache;
@@ -140,6 +136,30 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         // Always show one line.
         gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, GUIContent.none);
         editor.TexturePropertyMiniThumbnail(gui_full_line, encoding_texture_prop, label, "Text encoding texture"); // Sets property by itself
+        bool gui_clone_button = GUI.Button(
+            new Rect(gui_full_line.xMax - 10 * line_height, gui_full_line.y, 10 * line_height, line_height),
+            new GUIContent("Clone as separate asset", "Uses the default path with suffix"));
+        if (gui_clone_button && encoding_texture_prop.textureValue is not null)
+        {
+            // Find a free asset path
+            string material_path = AssetDatabase.GetAssetPath(editor.target);
+            string existing_texture_path = AssetDatabase.GetAssetPath(encoding_texture_prop.textureValue);
+            string path;
+            for (int copy_suffix = 0; true; copy_suffix += 1)
+            {
+                string suffix = copy_suffix > 0 ? $" {copy_suffix}" : "";
+                path = System.IO.Path.ChangeExtension(material_path, $".{encoding_texture_prop.name}{suffix}.asset");
+                if (path != existing_texture_path) { break; }
+            }
+
+            // Clone texture
+            Texture2D existing = encoding_texture_prop.textureValue as Texture2D;
+            Texture2D clone = new Texture2D(existing.width, existing.height, existing.graphicsFormat, TextureCreationFlags.None);
+            clone.LoadRawTextureData(existing.GetRawTextureData());
+            clone.Apply();
+            AssetDatabase.CreateAsset(clone, path);
+            encoding_texture_prop.textureValue = clone;
+        }
 
         if (!gui_section_foldout) { return; }
 
@@ -156,10 +176,6 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             return;
         }
 
-        // Styles for later
-        GUIStyle style_label_centered = new GUIStyle(EditorStyles.label); style_label_centered.alignment = TextAnchor.MiddleCenter;
-        GUIStyle invalid_text_field = StyleWithRedText(EditorStyles.textField);
-
         // Column positions
         Rect gui_list_button = new Rect(gui_full_line.x, gui_full_line.y, line_height, line_height);
         Rect gui_line_text = new Rect(gui_full_line.center.x, gui_full_line.y, gui_full_line.width * 0.5f, line_height);
@@ -167,6 +183,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         Rect gui_line_transform = new Rect(gui_list_button.xMax + 1, gui_full_line.y, gui_line_inverted.x - gui_list_button.xMax - 2, line_height);
 
         // Header line
+        GUIStyle style_label_centered = new GUIStyle(EditorStyles.label); style_label_centered.alignment = TextAnchor.MiddleCenter;
         if (GUI.Button(gui_list_button, new GUIContent("+", "New line"))) { cache.lines.AddLine(cache.font); }
         float numeric_field_width = 0.25f * gui_line_transform.width;
         EditorGUI.LabelField(
@@ -192,10 +209,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
             // Manage asset database. Try to keep the asset_path cached even if temporarily deleted.
             if (encoding_texture is null)
             {
-                if (cache.encoding_texture is not null && AssetDatabase.Contains(cache.encoding_texture))
-                {
-                    AssetDatabase.DeleteAsset(cache.encoding_texture_asset_path);
-                }
+                if (cache.encoding_texture is not null && AssetDatabase.Contains(cache.encoding_texture)) { AssetDatabase.DeleteAsset(cache.encoding_texture_asset_path); }
             }
             else
             {
@@ -223,6 +237,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         }
 
         // Lines of text metadata
+        GUIStyle invalid_text_field = StyleWithRedText(EditorStyles.textField);
         for (int i = 0; i < cache.lines.Count; i += 1)
         {
             gui_list_button.y += line_spacing;

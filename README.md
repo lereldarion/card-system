@@ -70,7 +70,6 @@ Check if the generated `metrics.json` contains a non empty `kernings` JSON field
 
 # TODO
 Needed TODOs
-- Issue when cloning the material, as 2 mats will reference the text, and editing it will break the other. Improve ergonomy.
 - Package release when operational
 
 Ideas
