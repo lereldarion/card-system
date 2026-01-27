@@ -32,8 +32,6 @@ A TTF font can be converted to an MSDF texture grid of glyphs, that is then samp
 
 Text lines are encoded in an [R32G32B32A32_SFloat](https://docs.unity3d.com/ScriptReference/Experimental.Rendering.GraphicsFormat.R32G32B32A32_SFloat.html) 2D texture, one line per row, with 1 control pixel followed by glyph references (4 per pixel).
 A custom [MaterialPropertyDrawer](https://docs.unity3d.com/ScriptReference/MaterialPropertyDrawer.html) provides a convenient GUI to edit the text ; it reads and regenerates the encoding texture.
-The texture can be safely renamed, its default generated name is `path/to/material.text_encoding_property_name.asset`.
-An example of use is :
 ```
 [LereldarionCardTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
 [HideInInspector] _Text_LineCount("Text line count", Integer) = 0 // Auto-generated text metadata
@@ -41,10 +39,16 @@ An example of use is :
 [HideInInspector] _Font_MSDF_Atlas_Config("Font config", Vector) = (0, 0, 0, 0) // Auto-generated font metadata
 ```
 
-See the [explorer card](Explorer/Card.shader) as an example of use, and the [material drawer code](Editor/LereldarionCardTextLinesDrawer.cs) for technical details.
+Text editor features :
+- Edit multiple lines of text. Avoid using hundreds of lines, as each line at least cost a bounding box check per pixel.
+- Line position : each line has an UV offset, Size in UV units, Rotation in degrees
+- Supports inverted text : characters are "holes" in a filled rectangle bounding box. Use spaces to pad the box sizes. Box height is not adjustable, only overall font size.
+- Read from / write to an encoding texture. The texture can be safely renamed, its default generated name is `path/to/material.text_encoding_property_name.asset`.
+- Indicates if the font does not support some characters
+- Swapping fonts : set the new font texture, and save if all characters are supported. This will regenerate the encoding texture with the new font encoding
+- Possible integration into shaders with custom editors, due to using a [MaterialPropertyDrawer](https://docs.unity3d.com/ScriptReference/MaterialPropertyDrawer.html) and not a full [ShaderGUI](https://docs.unity3d.com/ScriptReference/ShaderGUI.html)
 
-The text system can be reused in other contexts if you find uses for it.
-Because it is a `MaterialPropertyDrawer` instead of a full [ShaderGUI](https://docs.unity3d.com/ScriptReference/ShaderGUI.html), it should be able to be integrated into other shader systems that override the entire shader editor.
+See the [explorer card](Explorer/Card.shader) as an example of use, and the [material drawer code](Editor/LereldarionCardTextLinesDrawer.cs) for technical details.
 
 ## Font
 The text line system requires an [MSDF](https://github.com/Chlumsky/msdf-atlas-gen) font in *uniform grid* mode.
@@ -69,10 +73,10 @@ If your font kerning is not working, the solution is to open the font with [font
 Check if the generated `metrics.json` contains a non empty `kernings` JSON field.
 
 # TODO
-Needed TODOs
-- Package release when operational
+Required
+- Package release
 
-Ideas
+Maybe
 - PBR material, foil effects ?
 - Change line order with buttons ? May be annoying if text focus does not like it
 - Some space left in line control pixel for storing config : boldness, color ?
