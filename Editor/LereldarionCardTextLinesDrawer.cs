@@ -33,8 +33,6 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
     private bool gui_section_foldout = false;
 
     // Caching state. Avoid reloading font metrics and text everytime.
-    // Keep track of what was already validated or error.
-    // TODO separate by material, revamp to handle errors
     private Dictionary<Material, Cache> cache_by_material = new Dictionary<Material, Cache>();
     private class Cache
     {
@@ -600,7 +598,7 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 line_width_px = Mathf.Abs(line_width_px);
                 int glyph_count = (ushort)(line_pixels[1] >> 16);
 
-                // TODO read chars. Track advance and add spaces in gaps.
+                // Parse characters. Track advance and add spaces in gaps.
                 UNormToFloat center_converter = new UNormToFloat(bits_center, line_width_px);
                 string text = "";
                 char previous_c = (char)0;

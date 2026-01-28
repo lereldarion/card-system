@@ -24,7 +24,7 @@ Currently only used for cards for the *Exploreurs Imaginaires* community.
 
 # Technical shader documentation
 The card UI design is done using a *signed distance function* (SDF) to generate a sharp UI (https://iquilezles.org/articles/distfunctions2d/).
-See the [explorer card an example](Explorer/Card.shader).
+See the [explorer card as an example](Explorer/Card.shader).
 
 ## Text line system
 Sharp text is done using the [MSDF](https://github.com/Chlumsky/msdf-atlas-gen) strategy.
