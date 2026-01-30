@@ -9,6 +9,7 @@ ShaderImporter:
   - _Text_Encoding_Texture: {instanceID: 0}
   - _Font_MSDF_Atlas_Texture: {fileID: 2800000, guid: 92381300d8004a34496b1157cd2626fd,
       type: 3}
+  - _Noise_Texture: {fileID: 2800000, guid: e55fa5567448b08418a204994cf4f5e1, type: 3}
   nonModifiableTextures: []
   userData: 
   assetBundleName: 

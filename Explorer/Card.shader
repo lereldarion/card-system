@@ -39,13 +39,15 @@ Shader "Lereldarion/Card/Explorer" {
         // _Logo_Rotation_Scale_Offset("Logo rotation, scale, offset", Vector) = (23, 0.41, 0.19, -0.097)
         // _Logo_MSDF_Pixel_Range("Logo MSDF pixel range", Float) = 8
         // _Logo_MSDF_Texture_Size("Logo MSDF texture size", Float) = 128
-        // _Logo_Back_Size("Card back logo size", Float) = 0.35
+        // _Logo_Back_Size("Card back logo size", Float) = 0.45
 
         [Header(Text)]
         [LereldarionCardTextLines(_Font_MSDF_Atlas_Texture, _Font_MSDF_Atlas_Config, _Text_LineCount)] _Text_Encoding_Texture("Text lines", 2D) = "" {}
         [HideInInspector] _Text_LineCount("Text line count", Integer) = 0
         [NoScaleOffset] _Font_MSDF_Atlas_Texture("Font texture (MSDF)", 2D) = "" {}
         [HideInInspector] _Font_MSDF_Atlas_Config("Font config", Vector) = (51, 46, 10, 2)
+
+        [HideInInspector] _Noise_Texture("Noise texture for procedural back", 2D) = "" {}
     }
     SubShader {
         Tags {
@@ -66,6 +68,7 @@ Shader "Lereldarion/Card/Explorer" {
 
         // Common hardcoded sampler. Set by keywords in name https://docs.unity3d.com/Manual/SL-SamplerStates.html
         uniform SamplerState sampler_clamp_bilinear;
+        uniform SamplerState sampler_repeat_bilinear;
         
         uniform Texture2D<fixed4> _Foreground_Texture;
         uniform SamplerState sampler_Foreground_Texture;
@@ -96,12 +99,14 @@ Shader "Lereldarion/Card/Explorer" {
         static const float4 _Logo_Rotation_Scale_Offset = float4(23, 0.41, 0.19, -0.097);
         static const float _Logo_MSDF_Pixel_Range = 8;
         static const float _Logo_MSDF_Texture_Size = 128;
-        static const float _Logo_Back_Size = 0.35;
+        static const float _Logo_Back_Size = 0.45;
 
         uniform Texture2D<float4> _Text_Encoding_Texture; // uint4 but must use float4 due to unity refusing to create a u32x4 texture. Bitcast !
         uniform uint _Text_LineCount;
         uniform Texture2D<float3> _Font_MSDF_Atlas_Texture;
         uniform float4 _Font_MSDF_Atlas_Config; // (glyph_pixels.xy, atlas_columns, msdf_pixel_range)
+
+        uniform Texture2D<float3> _Noise_Texture;
 
         // Utils
         float length_sq(float2 v) { return dot(v, v); }
@@ -300,36 +305,7 @@ Shader "Lereldarion/Card/Explorer" {
                 return sd;
             }
 
-            // Card back : shadertoy adapted from https://www.shadertoy.com/view/WdyXDR
-            float2 glsl_mod(float2 x, float y) { return x - y * floor(x / y); }
-            float hash12_tiling(float2 p, float scale) {
-                p = glsl_mod(p, scale);
-                float3 p3  = frac(p.xyx * .1031);
-                p3 += dot(p3, p3.yzx + 33.33);
-                return frac((p3.x + p3.y) * p3.z);
-            }
-            float smooth_noise(float2 p, float scale) {
-                p *= scale;
-                float2 f = frac(p);
-                p = floor(p);
-                f = f * f * (3.0 - 2.0 * f);
-                return lerp(
-                    lerp(hash12_tiling(p + float2(0, 0), scale), hash12_tiling(p + float2(1, 0), scale), f.x),
-                    lerp(hash12_tiling(p + float2(0, 1), scale), hash12_tiling(p + float2(1, 1), scale), f.x),
-                    f.y
-                );
-            }
-            float fractal_brownian_motion_noise(float2 p) {
-                float f = 0.0;
-                float scale = 80.0; // integer
-                float amp = 0.6;
-                for (int i = 0; i < 5; i++) {
-                    f += smooth_noise(p, scale) * amp;
-                    amp *= 0.5;
-                    scale *= 2.0; // integer scale
-                }
-                return min(f, 1.0);
-            }
+            // Card back : vortex effect heavily simplified to reduce cost
             fixed3 vortex_color(float2 p, float time) {
                 const float linear_speed = 0.1;
                 const float rotation_speed = 0.2;
@@ -337,15 +313,17 @@ Shader "Lereldarion/Card/Explorer" {
 
                 const float radius = length(p);
                 float2 polar = float2(
-                    frac((atan2(p.y, p.x) - time * rotation_speed) / UNITY_TWO_PI),
+                    (atan2(p.y, p.x) - time * rotation_speed) / UNITY_TWO_PI,
                     focal / radius + linear_speed * time
                 );
                 polar.x += polar.y;
 
-                float fbm = fractal_brownian_motion_noise(polar);
+                float noise0 = _Noise_Texture.SampleLevel(sampler_repeat_bilinear, polar, 0).r;
+                float noise1 = _Noise_Texture.SampleLevel(sampler_repeat_bilinear, polar * 2, 0).r;
+                float noise = min(1, 0.8 * (noise0 + 0.5 * noise1));
 
-                fixed3 color = fixed3(0.1, 0.1, 1) * fbm; // Blue
-                color += smoothstep(0.8, 1.0, fbm); // White spots
+                fixed3 color = fixed3(0.1, 0.1, 1) * noise; // Blue
+                color += smoothstep(0.8, 1.0, noise); // White spots
                 color *= smoothstep(0, 0.7, radius); // Darken center
                 return saturate(color);
             }
