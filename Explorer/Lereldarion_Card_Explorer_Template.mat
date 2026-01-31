@@ -1,0 +1,59 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Lereldarion_Card_Explorer_Template
+  m_Shader: {fileID: 4800000, guid: f4be20c55be43564b90551108fd7fe9d, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _Background_Texture:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Font_MSDF_Atlas_Texture:
+        m_Texture: {fileID: 2800000, guid: db542738fbeddb94db567f668841daf8, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Foreground_Texture:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Logo_Texture:
+        m_Texture: {fileID: 2800000, guid: 5d9e718a0b751bd48b4a51e4a8fc529d, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Noise_Texture:
+        m_Texture: {fileID: 2800000, guid: e55fa5567448b08418a204994cf4f5e1, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Text_Encoding_Texture:
+        m_Texture: {fileID: 2800000, guid: 5442ecf405c376940a07cb86c8cda4d5, type: 2}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints:
+    - _Text_LineCount: 9
+    m_Floats:
+    - _Avatar_Parallax_Depth: 0.01
+    - _Background_Parallax_Depth: 0.1
+    m_Colors:
+    - _Font_MSDF_Atlas_Config: {r: 46, g: 42, b: 11, a: 2}
+    - _Logo_Color: {r: 1, g: 1, b: 1, a: 0.1}
+    - _UI_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []

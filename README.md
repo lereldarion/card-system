@@ -11,16 +11,17 @@ Currently only used for cards for the *Exploreurs Imaginaires* community.
 [Github repository](https://github.com/lereldarion/card-system/) in case you found this documentation from an installed package.
 
 # How to make "Explorer" cards
-1. Install the package using VCC/ALCOM or manual unitypackage.
+1. Install the package using VCC/ALCOM.
 2. Use the `Explorer/card.fbx` mesh for cards. Its aspect ratio matches the design the shader expect, a normal quad will not work correctly.
 3. Create a new `Material` using the `Lereldarion/Card/Explorer` shader. Some properties will be filled by default (font).
+    - You can instead start with a copy of the `Explorer/Lereldarion_Card_Explorer_Template` material, which has some example text. Click on the `Use a duplicate` button of the material copy to duplicate the text data from the template (and not edit the template itself !).
 4. Set a pair of foreground (avatar) / background textures.
     - Use the camera in *multi-layer* mode to generate a pair of textures, and crop/resize them.
     - Foreground should have alpha (DXT5 / BC7)
     - Background should not use alpha to reduce VRAM (DXT1)
     - 512x512 textures are enough for a card size.
     - Both have a parallax effect. Reduce the tiling values to slightly below 1 (0.9) to avoid hitting the edges when viewed at an angle.
-5. Use the text edition GUI to add lines of text. TODO provide an example with all kind of features correctly placed.
+5. Use the text edition GUI to add lines of text.
 
 # Technical shader documentation
 The card UI design is done using a *signed distance function* (SDF) to generate a sharp UI (https://iquilezles.org/articles/distfunctions2d/).
