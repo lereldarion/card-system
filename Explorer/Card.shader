@@ -324,7 +324,7 @@ Shader "Lereldarion/Card/Explorer" {
 
                 fixed3 color = fixed3(0.1, 0.1, 1) * noise; // Blue
                 color += smoothstep(0.8, 1.0, noise); // White spots
-                color *= smoothstep(0, 0.7, radius); // Darken center
+                color *= smoothstep(0, 0.9, radius); // Darken center
                 return saturate(color);
             }
 

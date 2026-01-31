@@ -7,7 +7,7 @@ ShaderImporter:
   - _Background_Texture: {instanceID: 0}
   - _Logo_Texture: {fileID: 2800000, guid: 5d9e718a0b751bd48b4a51e4a8fc529d, type: 3}
   - _Text_Encoding_Texture: {instanceID: 0}
-  - _Font_MSDF_Atlas_Texture: {fileID: 2800000, guid: 92381300d8004a34496b1157cd2626fd,
+  - _Font_MSDF_Atlas_Texture: {fileID: 2800000, guid: db542738fbeddb94db567f668841daf8,
       type: 3}
   - _Noise_Texture: {fileID: 2800000, guid: e55fa5567448b08418a204994cf4f5e1, type: 3}
   nonModifiableTextures: []

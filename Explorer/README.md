@@ -12,14 +12,8 @@ Derivative work : a subset of characters (`charset.txt`) has been converted to [
 Charset
 ```
 [32, 126]
-"àâåéèêëïôùÿ"
-"“”–—×°"
-```
-
-TODO new charset
-```
-[32, 126]
-"àâåÅçÇéÉèÈêÊëïñôùÿ"
-"æœ"
-"“”–—×°"
+"àÀâÂåçÇéÉèÈêÊëîïñôùûüÿ"
+"æÆœŒ"
+"“”—×÷°…"
+"¢ß€£¶¿"
 ```
