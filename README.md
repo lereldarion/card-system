@@ -73,11 +73,10 @@ However `msdf-atlas-gen` only supports older kerning data format (https://github
 If your font kerning is not working, the solution is to open the font with [fontforge](https://fontforge.org), export it with legacy kern data, and run `msdf-atlas-gen` on it.
 Check if the generated `metrics.json` contains a non empty `kernings` JSON field.
 
-# TODO
-Required
-- Package release
+# Status
+v1 with explorer card released.
 
-Maybe
+Maybe TODO
 - PBR material, foil effects ?
 - Change line order with buttons ? May be annoying if text focus does not like it
 - Some space left in line control pixel for storing config : boldness, color ?
