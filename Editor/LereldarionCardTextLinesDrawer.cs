@@ -43,7 +43,6 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         public Texture font_texture = null;
         public Font font = null;
         public Texture encoding_texture = null;
-        public string encoding_texture_asset_path = "";
         public LineCache lines = null;
     }
 
@@ -123,9 +122,8 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
                 cache.state = Cache.State.LoadingLines;
                 cache.encoding_texture = encoding_texture;
 
-                if (encoding_texture is not null) { cache.encoding_texture_asset_path = AssetDatabase.GetAssetPath(encoding_texture); }
                 try { cache.lines = cache.font.DecodeLines(encoding_texture); }
-                catch (Exception e) { cache.error = $"Failed to load lines from {cache.encoding_texture_asset_path}: {e.Message}"; return cache; }
+                catch (Exception e) { cache.error = $"Failed to load lines from {AssetDatabase.GetAssetPath(encoding_texture)}: {e.Message}"; return cache; }
                 cache.error = null;
                 cache.state = Cache.State.Ok;
             }
@@ -143,30 +141,6 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         // Always show one line.
         gui_section_foldout = EditorGUI.Foldout(gui_full_line, gui_section_foldout, GUIContent.none);
         editor.TexturePropertyMiniThumbnail(gui_full_line, encoding_texture_prop, label, "Text encoding texture"); // Sets property by itself
-        bool gui_clone_button = GUI.Button(
-            new Rect(gui_full_line.xMax - button_width, gui_full_line.y, button_width, line_height),
-            new GUIContent("Use a duplicate", "Clone texture and use the clone ; use this after cloning the material to edit a fresh copy of text data"));
-        if (gui_clone_button && encoding_texture_prop.textureValue is not null)
-        {
-            // Find a free asset path
-            string material_path = AssetDatabase.GetAssetPath(editor.target);
-            string existing_texture_path = AssetDatabase.GetAssetPath(encoding_texture_prop.textureValue);
-            string path;
-            for (int copy_suffix = 0; true; copy_suffix += 1)
-            {
-                string suffix = copy_suffix > 0 ? $" {copy_suffix}" : "";
-                path = System.IO.Path.ChangeExtension(material_path, $".{encoding_texture_prop.name}{suffix}.asset");
-                if (path != existing_texture_path) { break; }
-            }
-
-            // Clone texture
-            Texture2D existing = encoding_texture_prop.textureValue as Texture2D;
-            Texture2D clone = new Texture2D(existing.width, existing.height, existing.graphicsFormat, TextureCreationFlags.None);
-            clone.LoadRawTextureData(existing.GetRawTextureData());
-            clone.Apply();
-            AssetDatabase.CreateAsset(clone, path);
-            encoding_texture_prop.textureValue = clone;
-        }
 
         if (!gui_section_foldout) { return; }
 
@@ -218,18 +192,12 @@ public class LereldarionCardTextLinesDrawer : MaterialPropertyDrawer
         {
             var (encoding_texture, line_count) = cache.font.EncodeLines(cache.lines);
 
-            // Manage asset database. Try to keep the asset_path cached even if temporarily deleted.
-            if (encoding_texture is null)
+            // Always write to an asset path determined by material name + property name.
+            // This will leave unused textures when renamed, but ensures that texture assets are unique per material.
+            if (encoding_texture is not null)
             {
-                if (cache.encoding_texture is not null && AssetDatabase.Contains(cache.encoding_texture)) { AssetDatabase.DeleteAsset(cache.encoding_texture_asset_path); }
-            }
-            else
-            {
-                if (cache.encoding_texture_asset_path is null || cache.encoding_texture_asset_path == "")
-                {
-                    cache.encoding_texture_asset_path = System.IO.Path.ChangeExtension(AssetDatabase.GetAssetPath(editor.target), $".{encoding_texture_prop.name}.asset");
-                }
-                AssetDatabase.CreateAsset(encoding_texture, cache.encoding_texture_asset_path);
+                string path = System.IO.Path.ChangeExtension(AssetDatabase.GetAssetPath(editor.target), $".{encoding_texture_prop.name}.asset");
+                AssetDatabase.CreateAsset(encoding_texture, path);
             }
 
             Material material = editor.target as Material;

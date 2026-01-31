@@ -14,7 +14,7 @@ Currently only used for cards for the *Exploreurs Imaginaires* community.
 1. Install the package using VCC/ALCOM.
 2. Use the `Explorer/card.fbx` mesh for cards. Its aspect ratio matches the design the shader expect, a normal quad will not work correctly.
 3. Create a new `Material` using the `Lereldarion/Card/Explorer` shader. Some properties will be filled by default (font).
-    - You can instead start with a copy of the `Explorer/Lereldarion_Card_Explorer_Template` material, which has some example text. Click on the `Use a duplicate` button of the material copy to duplicate the text data from the template (and not edit the template itself !).
+    - You can instead start with a copy of the `Explorer/Lereldarion_Card_Explorer_Template` material, which has some example text.
 4. Set a pair of foreground (avatar) / background textures.
     - Use the camera in *multi-layer* mode to generate a pair of textures, and crop/resize them.
     - Foreground should have alpha (DXT5 / BC7)
@@ -44,7 +44,7 @@ Text editor features :
 - Edit multiple lines of text. Avoid using hundreds of lines, as each line at least cost a bounding box check per pixel.
 - Line position : each line has an UV offset, Size in UV units, Rotation in degrees
 - Supports inverted text : characters are "holes" in a filled rectangle bounding box. Use spaces to pad the box sizes. Box height is not adjustable, only overall font size.
-- Read from / write to an encoding texture. The texture can be safely renamed, its default generated name is `path/to/material.text_encoding_property_name.asset`.
+- Read from / write to an encoding texture. The texture is always saved as `path/to/material.text_encoding_property_name.asset` to ensure that it is unique per material.
 - Indicates if the font does not support some characters
 - Swapping fonts : set the new font texture, and save if all characters are supported. This will regenerate the encoding texture with the new font encoding
 - Possible integration into shaders with custom editors, due to using a [MaterialPropertyDrawer](https://docs.unity3d.com/ScriptReference/MaterialPropertyDrawer.html) and not a full [ShaderGUI](https://docs.unity3d.com/ScriptReference/ShaderGUI.html)
