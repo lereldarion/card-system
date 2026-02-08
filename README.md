@@ -77,6 +77,8 @@ Check if the generated `metrics.json` contains a non empty `kernings` JSON field
 v1 with explorer card released.
 
 Maybe TODO
+- fallback slot for people not showing shaders
+- drawer : warning if sample material is being edited
 - PBR material, foil effects ?
 - Change line order with buttons ? May be annoying if text focus does not like it
 - Some space left in line control pixel for storing config : boldness, color ?
